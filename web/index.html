@@ -15,6 +15,12 @@
     the `--base-href` argument provided to `flutter build`.
   -->
   <base href="$FLUTTER_BASE_HREF">
+  <script>
+    // talkme.space has https: browsers only allow the camera, microphone and notifications there.
+    if (location.protocol === 'http:' && /^(www\.)?talkme\.space$/.test(location.hostname)) {
+      location.replace('https://talkme.space' + location.pathname + location.search + location.hash);
+    }
+  </script>
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">

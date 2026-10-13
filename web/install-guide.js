@@ -3,9 +3,9 @@
 // Shown when TalkMe is opened in the browser (not from the home screen), at most every 3 days,
 // or right away with ?install=1 (the iPhone button on talkme.space links there).
 (function () {
-  // The https address of TalkMe (Cloudflare Worker in front of talkme.space). On plain http the
-  // iPhone can't use the camera, microphone or notifications, so the guide sends people there first.
-  var SECURE_URL = 'https://talkme.ghostzero270.workers.dev/app/?install=1';
+  // On plain http the iPhone can't use the camera, microphone or notifications, so the guide sends
+  // people to the https address of the same site first.
+  var SECURE_URL = 'https://' + location.hostname.replace(/^www\./, '') + '/app/?install=1';
   var insecure = location.protocol === 'http:' && location.hostname !== 'localhost';
 
   var ua = navigator.userAgent;

@@ -48,18 +48,25 @@ class Api {
 
   static Future<void> loadServer() async {
     var saved = await Kv.read(_serverKey);
-    // Quick-tunnel addresses are temporary; fall back to the real server.
-    if (saved != null && saved.contains('.trycloudflare.com')) {
+    // Quick-tunnel addresses are temporary, and the Cloudflare Worker alias is no longer needed
+    // now that talkme.space has its own https: go back to the real server.
+    if (saved != null &&
+        (saved.contains('.trycloudflare.com') || saved.contains('.workers.dev'))) {
       await Kv.write(_serverKey, null);
       saved = null;
     }
     // The web app talks to the site it's served from (same address, http or https).
     _server = saved ?? (kIsWeb ? '${Uri.base.origin}/api' : AppConfig.apiBase);
     if (kIsWeb) return;
-    // Prefer HTTPS as soon as the server offers it (e.g. after enabling Cloudflare).
-    if (saved == null && _server.startsWith('http://') && !_isLocal(_server)) {
-      final secure = 'https://${_server.substring(7)}';
-      if (await _isOurServer(secure)) _server = secure;
+    // Use HTTPS; if it can't be reached right now (certificate renewal, hosting hiccup), use http.
+    if (saved == null && !_isLocal(_server)) {
+      final secure = _server.replaceFirst(RegExp(r'^http://'), 'https://');
+      final plain = secure.replaceFirst('https://', 'http://');
+      if (await _isOurServer(secure)) {
+        _server = secure;
+      } else if (await _isOurServer(plain)) {
+        _server = plain;
+      }
     }
   }
 
