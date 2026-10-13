@@ -13,7 +13,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'live_room_screen.dart';
 import '../i18n.dart';
-import 'leaderboard_screen.dart';
+import '../widgets/live_rankings.dart';
 import 'live_extras.dart';
 
 /// "Live" tab: who's streaming now, plus a Go Live call to action.
@@ -88,14 +88,12 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: tr('Leaderboards'),
+            tooltip: tr('LIVE rankings'),
             icon: const Icon(
               Icons.emoji_events_rounded,
               color: AppColors.amber,
             ),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
-            ),
+            onPressed: () => showLiveRankings(context),
           ),
           IconButton(
             tooltip: tr('Schedule a live'),

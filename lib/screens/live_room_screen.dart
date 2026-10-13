@@ -16,6 +16,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/battle_layer.dart';
 import '../widgets/gifts.dart';
+import '../widgets/live_rankings.dart';
 import '../vip.dart';
 import 'profile_screen.dart';
 import '../i18n.dart';
@@ -120,6 +121,9 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
   /// "X joined" strip, tap-to-like counter and a one-tap gift.
   bool _following = true;
   List<RankEntry> _topGifters = const [];
+
+  /// The host's place in this hour's LIVE ranking (null: not ranked yet).
+  RankPlace? _hourRank;
   Timer? _topTimer, _joinedTimer, _likeTimer;
   String? _joined;
   int _joinedLevel = 0;
@@ -911,6 +915,10 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
     try {
       final top = await ref.read(apiProvider).liveTop(live.id);
       if (mounted) setState(() => _topGifters = top.take(3).toList());
+      final hour = await ref
+          .read(apiProvider)
+          .liveRanking('streamers', 'hour', focus: live.host.id);
+      if (mounted) setState(() => _hourRank = hour.focus);
     } catch (_) {}
   }
 
@@ -1704,25 +1712,46 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                   top: pad.top + 56,
                   left: 10,
                   right: 10,
-                  child: Row(
-                    children: [
-                      const LiveBadge(),
-                      const SizedBox(width: 6),
-                      _TopChip(
-                        icon: Icons.emoji_events_rounded,
-                        color: AppColors.amber,
-                        text: tr('Top gifters'),
-                        onTap: _showTop,
-                      ),
-                      if (_likes > 0) ...[
+                  // Scrolls sideways on narrow phones instead of overflowing.
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        const LiveBadge(),
                         const SizedBox(width: 6),
                         _TopChip(
-                          icon: Icons.favorite_rounded,
-                          color: AppColors.like,
-                          text: compactCount(_likes),
+                          icon: Icons.emoji_events_rounded,
+                          color: AppColors.amber,
+                          text: tr('Top gifters'),
+                          onTap: _showTop,
                         ),
+                        const SizedBox(width: 6),
+                        _TopChip(
+                          icon: Icons.leaderboard_rounded,
+                          color: AppColors.amber,
+                          text: _hourRank == null
+                              ? tr('Hourly ranking')
+                              : widget.isHost && _hourRank!.rank > 1
+                              ? tr('Hourly #{0} · +{1}', [
+                                  _hourRank!.rank,
+                                  compactCount(_hourRank!.gap),
+                                ])
+                              : tr('Hourly #{0}', [_hourRank!.rank]),
+                          onTap: () => showLiveRankings(
+                            context,
+                            highlight: _live?.host.id,
+                          ),
+                        ),
+                        if (_likes > 0) ...[
+                          const SizedBox(width: 6),
+                          _TopChip(
+                            icon: Icons.favorite_rounded,
+                            color: AppColors.like,
+                            text: compactCount(_likes),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
                 if (live != null && live.title.isNotEmpty && !_inBattle)

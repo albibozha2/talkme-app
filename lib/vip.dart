@@ -337,3 +337,37 @@ Future<void> showVipTiers(
     ),
   ),
 );
+
+/// 🏆 for last week's top 3 in the LIVE rankings (gold, silver or bronze), shown for the whole week.
+class ChampionBadge extends StatelessWidget {
+  const ChampionBadge({super.key, required this.rank, this.small = false});
+  final int rank;
+  final bool small;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = switch (rank) {
+      1 => const [Color(0xFFF59E0B), Color(0xFFFDE68A)],
+      2 => const [Color(0xFF94A3B8), Color(0xFFE2E8F0)],
+      _ => const [Color(0xFFB87333), Color(0xFFE0A370)],
+    };
+    return Tooltip(
+      message: tr('#{0} of last week', [rank]),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: small ? 4 : 6, vertical: 1),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: colors),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          '🏆$rank',
+          style: TextStyle(
+            fontSize: small ? 9.5 : 11,
+            fontWeight: FontWeight.w900,
+            color: rank == 2 ? const Color(0xFF1E293B) : Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+}

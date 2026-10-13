@@ -27,6 +27,8 @@ class AppUser {
     this.storySeen = false,
     this.level = 0,
     this.giftsSent,
+    this.championType,
+    this.championRank = 0,
     this.bonusCoins = 0,
     this.twoFactor = false,
     this.backupCodesLeft = 0,
@@ -67,6 +69,10 @@ class AppUser {
 
   /// Coins I have gifted in total (only on my own profile): VIP progress.
   final int? giftsSent;
+
+  /// Top 3 of last week's LIVE ranking ('streamers' or 'gifters', place 1–3): 🏆 badge this week.
+  final String? championType;
+  final int championRank;
 
   /// Free reward coins (part of [coins]); they can be gifted but never paid out.
   final int bonusCoins;
@@ -143,6 +149,8 @@ class AppUser {
     storySeen: (j['story_seen'] as bool?) ?? false,
     level: (j['level'] as int?) ?? 0,
     giftsSent: j['gifts_sent'] as int?,
+    championType: (j['champion'] as Map?)?['type'] as String?,
+    championRank: ((j['champion'] as Map?)?['rank'] as int?) ?? 0,
     bonusCoins: (j['bonus_coins'] as int?) ?? 0,
     twoFactor: (j['two_factor'] as bool?) ?? false,
     backupCodesLeft: (j['backup_codes_left'] as int?) ?? 0,
@@ -863,15 +871,61 @@ class Folder {
 
 /// One row of a leaderboard.
 class RankEntry {
-  RankEntry(this.rank, this.coins, this.user);
+  RankEntry(this.rank, this.coins, this.user, {this.liveId, this.reward = 0});
   final int rank, coins;
   final AppUser user;
+
+  /// Live right now (LIVE rankings): tap to join.
+  final int? liveId;
+
+  /// Bonus coins won (last week's winners).
+  final int reward;
 
   factory RankEntry.fromJson(Map<String, dynamic> j) => RankEntry(
     j['rank'] as int,
     j['coins'] as int,
     AppUser.fromJson(j['user'] as Map<String, dynamic>),
+    liveId: j['live_id'] as int?,
+    reward: (j['reward'] as int?) ?? 0,
   );
+}
+
+/// Someone's place in a LIVE ranking, and the coins they need to pass the one above.
+class RankPlace {
+  RankPlace(Map<String, dynamic> j)
+    : rank = j['rank'] as int,
+      coins = j['coins'] as int,
+      gap = (j['gap'] as int?) ?? 0;
+  final int rank, coins, gap;
+}
+
+/// LIVE ranking for an hour, day or week (streamers by coins received, gifters by coins sent).
+class LiveRanking {
+  LiveRanking(Map<String, dynamic> j)
+    : type = j['type'] as String,
+      period = j['period'] as String,
+      endsAt = DateTime.parse(j['ends_at'] as String),
+      items = [
+        for (final e in j['items'] as List)
+          RankEntry.fromJson(e as Map<String, dynamic>),
+      ],
+      me = j['me'] == null ? null : RankPlace(j['me'] as Map<String, dynamic>),
+      focus = j['focus'] == null
+          ? null
+          : RankPlace(j['focus'] as Map<String, dynamic>),
+      rewards = [for (final r in (j['rewards'] as List? ?? [])) r as int],
+      lastWinners = [
+        for (final e in (j['last_winners'] as List? ?? []))
+          RankEntry.fromJson(e as Map<String, dynamic>),
+      ];
+  final String type, period;
+  final DateTime endsAt;
+  final List<RankEntry> items;
+  final RankPlace? me, focus;
+
+  /// Bonus coins for places 1–3 (weekly).
+  final List<int> rewards;
+  final List<RankEntry> lastWinners;
 }
 
 /// A live someone scheduled for later.

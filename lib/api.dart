@@ -519,6 +519,17 @@ class Api {
   Future<RewardState> checkIn() async =>
       RewardState(await post('/rewards/checkin') as Map<String, dynamic>);
 
+  /// LIVE ranking: [type] streamers or gifters; [period] hour, day or week. [focus]: also the place of this user.
+  Future<LiveRanking> liveRanking(String type, String period, {int? focus}) async =>
+      LiveRanking(
+        await get('/rankings/live', {
+              'type': type,
+              'period': period,
+              if (focus != null) 'user': '$focus',
+            })
+            as Map<String, dynamic>,
+      );
+
   /// [type] gifters or creators; [period] day, week, month or all.
   Future<(List<RankEntry>, RankEntry?)> leaderboard(
     String type,

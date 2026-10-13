@@ -16,6 +16,7 @@ import 'people_screens.dart';
 import 'live_room_screen.dart';
 import 'wallet_screen.dart';
 import '../i18n.dart';
+import '../widgets/live_rankings.dart';
 import '../vip.dart';
 import '../widgets/language_picker.dart';
 
@@ -498,6 +499,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   giftsSent: u.giftsSent,
                                 ),
                                 child: LevelBadge(level: u.level),
+                              ),
+                            ],
+                            if (u.championType != null) ...[
+                              const SizedBox(width: 6),
+                              GestureDetector(
+                                onTap: () => showLiveRankings(
+                                  context,
+                                  tab: u.championType == 'gifters' ? 2 : 1,
+                                ),
+                                child: ChampionBadge(rank: u.championRank),
                               ),
                             ],
                           ],
