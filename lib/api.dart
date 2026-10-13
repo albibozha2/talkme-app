@@ -988,14 +988,23 @@ class Api {
   Future<PayoutInfo> payouts() async =>
       PayoutInfo.fromJson(await get('/wallet/payouts') as Map<String, dynamic>);
 
+  /// Bank transfer: [holder], [iban], [bank] and [bic] instead of [details].
   Future<void> requestPayout({
     required int coins,
     required String method,
-    required String details,
+    String details = '',
+    String? holder,
+    String? iban,
+    String? bank,
+    String? bic,
   }) => post('/wallet/payouts', {
     'coins': coins,
     'method': method,
     'details': details,
+    'holder': ?holder,
+    'iban': ?iban,
+    'bank': ?bank,
+    'bic': ?bic,
   });
 
   // ---- direct messages ----

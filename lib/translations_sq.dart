@@ -909,6 +909,11 @@ const sqTexts = <String, String>{
   'Send a gift to {0}': 'Dërgo një dhuratë te {0}',
   'They are not on camera any more.': 'Nuk janë më në kamerë.',
   'Host': 'Hosti',
+  'Account holder (full name)': 'Mbajtësi i llogarisë (emri i plotë)',
+  'The bank account must be in your name.': 'Llogaria bankare duhet të jetë në emrin tënd.',
+  'Bank name': 'Emri i bankës',
+  'SWIFT / BIC (for banks outside Albania)': 'SWIFT / BIC (për banka jashtë Shqipërisë)',
+  'Bank transfer (IBAN)': 'Transfertë bankare (IBAN)',
 };
 
 /// Error messages sent by the server.
@@ -1073,4 +1078,7 @@ const sqServer = <String, String>{
   'Only followers can ask to join this live. Follow the host first.': 'Vetëm ndjekësit mund të kërkojnë të hyjnë në këtë live. Ndiq hostin më parë.',
   'You can’t invite this person.': 'Nuk mund ta ftosh këtë person.',
   'They are not on camera any more.': 'Nuk janë më në kamerë.',
+  'Enter the full name of the account holder, as it is at the bank.': 'Shkruaj emrin e plotë të mbajtësit të llogarisë, siç është në bankë.',
+  'Check the IBAN. It should look like AL47 2121 1009 0000 0002 3569 8741.': 'Kontrollo IBAN-in. Duhet të duket si AL47 2121 1009 0000 0002 3569 8741.',
+  'Check the SWIFT / BIC code (8 or 11 letters and numbers), or leave it empty.': 'Kontrollo kodin SWIFT / BIC (8 ose 11 shkronja dhe numra), ose lëre bosh.',
 };

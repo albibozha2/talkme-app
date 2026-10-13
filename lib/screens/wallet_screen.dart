@@ -703,16 +703,30 @@ class _PayoutSheetState extends ConsumerState<_PayoutSheet> {
   late double _coins = widget.info.earned.toDouble();
   late String _method = widget.info.methods.first;
   final _details = TextEditingController();
+  final _holder = TextEditingController();
+  final _iban = TextEditingController();
+  final _bank = TextEditingController();
+  final _bic = TextEditingController();
   bool _busy = false;
+
+  /// "Bank transfer (IBAN)": name, IBAN, bank and SWIFT/BIC fields.
+  bool get _isBank {
+    final m = _method.toLowerCase();
+    return m.contains('iban') || m.contains('bank');
+  }
 
   @override
   void dispose() {
-    _details.dispose();
+    for (final c in [_details, _holder, _iban, _bank, _bic]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _send() async {
-    if (_details.text.trim().isEmpty) {
+    if (_isBank
+        ? _holder.text.trim().isEmpty || _iban.text.trim().isEmpty
+        : _details.text.trim().isEmpty) {
       showToast(context, tr('Enter where we should send the money.'));
       return;
     }
@@ -723,7 +737,11 @@ class _PayoutSheetState extends ConsumerState<_PayoutSheet> {
           .requestPayout(
             coins: _coins.round(),
             method: _method,
-            details: _details.text.trim(),
+            details: _isBank ? '' : _details.text.trim(),
+            holder: _isBank ? _holder.text.trim() : null,
+            iban: _isBank ? _iban.text.trim() : null,
+            bank: _isBank ? _bank.text.trim() : null,
+            bic: _isBank ? _bic.text.trim() : null,
           );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -738,8 +756,11 @@ class _PayoutSheetState extends ConsumerState<_PayoutSheet> {
     final info = widget.info;
     final coins = _coins.round();
     final amount = (coins * info.usdPerCoin).toStringAsFixed(2);
-    // POK pays in lek.
-    final pok = _method.toLowerCase() == 'pok' && info.lekPerCoin > 0;
+    // POK and Albanian bank accounts (IBAN starting with AL) are paid in lek.
+    final pok =
+        (_method.toLowerCase() == 'pok' ||
+            (_isBank && _iban.text.trim().toUpperCase().startsWith('AL'))) &&
+        info.lekPerCoin > 0;
     final money = pok
         ? formatLek((coins * info.lekPerCoin).floor())
         : '\$$amount';
@@ -796,33 +817,70 @@ class _PayoutSheetState extends ConsumerState<_PayoutSheet> {
               decoration: InputDecoration(labelText: tr('Payout method')),
               items: [
                 for (final m in info.methods)
-                  DropdownMenuItem(value: m, child: Text(m)),
+                  DropdownMenuItem(value: m, child: Text(tr(m))),
               ],
               onChanged: (v) => setState(() => _method = v ?? _method),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _details,
-              maxLength: 255,
-              keyboardType: _method.toLowerCase() == 'pok'
-                  ? TextInputType.phone
-                  : TextInputType.text,
-              decoration: InputDecoration(
-                labelText: _method.toLowerCase() == 'pok'
-                    ? tr('Phone number of your POK account')
-                    : _method.toLowerCase().contains('paypal')
-                    ? tr('PayPal email')
-                    : tr('Account details'),
-                hintText: _method.toLowerCase() == 'pok'
-                    ? '+355 69 123 4567'
-                    : _method.toLowerCase().contains('bank')
-                    ? tr('Name, IBAN / account number, bank')
-                    : null,
-                helperText: _method.toLowerCase() == 'pok'
-                    ? tr('The money is sent to your POK wallet.')
-                    : null,
+            if (_isBank) ...[
+              TextField(
+                controller: _holder,
+                maxLength: 80,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  labelText: tr('Account holder (full name)'),
+                  helperText: tr('The bank account must be in your name.'),
+                ),
               ),
-            ),
+              TextField(
+                controller: _iban,
+                maxLength: 42,
+                textCapitalization: TextCapitalization.characters,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'IBAN',
+                  hintText: 'AL47 2121 1009 0000 0002 3569 8741',
+                ),
+              ),
+              TextField(
+                controller: _bank,
+                maxLength: 60,
+                decoration: InputDecoration(
+                  labelText: tr('Bank name'),
+                  hintText: 'BKT, Raiffeisen, Credins, OTP…',
+                ),
+              ),
+              TextField(
+                controller: _bic,
+                maxLength: 11,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  labelText: tr('SWIFT / BIC (for banks outside Albania)'),
+                ),
+              ),
+            ] else
+              TextField(
+                controller: _details,
+                maxLength: 255,
+                keyboardType: _method.toLowerCase() == 'pok'
+                    ? TextInputType.phone
+                    : TextInputType.text,
+                decoration: InputDecoration(
+                  labelText: _method.toLowerCase() == 'pok'
+                      ? tr('Phone number of your POK account')
+                      : _method.toLowerCase().contains('paypal')
+                      ? tr('PayPal email')
+                      : tr('Account details'),
+                  hintText: _method.toLowerCase() == 'pok'
+                      ? '+355 69 123 4567'
+                      : _method.toLowerCase().contains('bank')
+                      ? tr('Name, IBAN / account number, bank')
+                      : null,
+                  helperText: _method.toLowerCase() == 'pok'
+                      ? tr('The money is sent to your POK wallet.')
+                      : null,
+                ),
+              ),
             const SizedBox(height: 8),
             GradientButton(
               label: tr('Request {0}', [money]),
