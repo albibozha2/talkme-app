@@ -18,12 +18,23 @@ import 'gift_effects.dart';
 
 export 'gift_effects.dart';
 
+/// Someone a gift can go to in a multi-guest live (the host has [id] null).
+class GiftRecipient {
+  const GiftRecipient({this.id, required this.name, this.avatarUrl});
+  final int? id;
+  final String name;
+  final String? avatarUrl;
+}
+
 /// Gift picker, TikTok-style: pick a gift and how many (x1 … x99), send, and keep tapping the combo
 /// button to send again. Stays open; [onSent] runs after every gift that went through.
+/// [recipients]: host and guests on camera (multi-guest live); [to] the one chosen first.
 Future<void> showGiftSheet(
   BuildContext context, {
   int? liveId,
   int? videoId,
+  List<GiftRecipient> recipients = const [],
+  int? to,
   required void Function(GiftEvent sent) onSent,
 }) => showModalBottomSheet<void>(
   context: context,
@@ -32,16 +43,30 @@ Future<void> showGiftSheet(
   barrierColor: Colors.black26,
   builder: (_) => Theme(
     data: buildTheme(Brightness.dark),
-    child: _GiftSheet(liveId: liveId, videoId: videoId, onSent: onSent),
+    child: _GiftSheet(
+      liveId: liveId,
+      videoId: videoId,
+      recipients: recipients,
+      to: to,
+      onSent: onSent,
+    ),
   ),
 );
 
 const _quantities = [1, 5, 10, 99];
 
 class _GiftSheet extends ConsumerStatefulWidget {
-  const _GiftSheet({this.liveId, this.videoId, required this.onSent});
+  const _GiftSheet({
+    this.liveId,
+    this.videoId,
+    this.recipients = const [],
+    this.to,
+    required this.onSent,
+  });
   final int? liveId;
   final int? videoId;
+  final List<GiftRecipient> recipients;
+  final int? to;
   final void Function(GiftEvent sent) onSent;
 
   @override
@@ -56,6 +81,9 @@ class _GiftSheetState extends ConsumerState<_GiftSheet>
   int _quantity = 1;
   bool _sending = false;
   Object? _error;
+
+  /// Who gets the gift (null: the host).
+  late int? _to = widget.to;
 
   /// Combo window after a send: the button turns into a countdown ring.
   late final _combo = AnimationController(
@@ -133,7 +161,13 @@ class _GiftSheetState extends ConsumerState<_GiftSheet>
     try {
       final balance = await ref
           .read(apiProvider)
-          .sendGift(g.id, liveId: widget.liveId, videoId: widget.videoId, quantity: q);
+          .sendGift(
+            g.id,
+            liveId: widget.liveId,
+            videoId: widget.videoId,
+            quantity: q,
+            to: _to,
+          );
       HapticFeedback.mediumImpact();
       final me = ref.read(sessionProvider).value;
       widget.onSent(
@@ -143,6 +177,13 @@ class _GiftSheetState extends ConsumerState<_GiftSheet>
           senderAvatar: me?.avatarUrl,
           quantity: q,
           senderLevel: me?.level ?? 0,
+          toId: _to,
+          toName: _to == null
+              ? null
+              : widget.recipients
+                    .where((r) => r.id == _to)
+                    .firstOrNull
+                    ?.name,
         ),
       );
       if (mounted) {
@@ -182,6 +223,74 @@ class _GiftSheetState extends ConsumerState<_GiftSheet>
                   CoinChip(coins: _balance!, onTap: _recharge),
               ],
             ),
+            if (widget.recipients.length > 1) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 64,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 10, top: 18),
+                      child: Text(
+                        tr('Send to'),
+                        style: const TextStyle(color: Colors.white60),
+                      ),
+                    ),
+                    for (final r in widget.recipients)
+                      GestureDetector(
+                        onTap: () => setState(() {
+                          if (r.id != _to) {
+                            _combo.reset();
+                            _comboCount = 0;
+                          }
+                          _to = r.id;
+                        }),
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: Column(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: r.id == _to
+                                        ? AppColors.amber
+                                        : Colors.transparent,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: Avatar(
+                                  url: r.avatarUrl,
+                                  name: r.name,
+                                  radius: 17,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              SizedBox(
+                                width: 60,
+                                child: Text(
+                                  r.id == null ? tr('Host') : r.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: r.id == _to
+                                        ? AppColors.amber
+                                        : Colors.white70,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             if (gifts == null)
               SizedBox(

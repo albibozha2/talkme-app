@@ -890,10 +890,12 @@ class Api {
     int? liveId,
     int? videoId,
     int quantity = 1,
+    int? to,
   }) async {
     final data = await post('/gifts/send', {
       'gift_id': giftId,
       if (quantity > 1) 'quantity': quantity,
+      'to': ?to,
       'live_id': ?liveId,
       'video_id': ?videoId,
     }) as Map<String, dynamic>;
@@ -1183,29 +1185,50 @@ class Api {
   /// Cancel my request or leave the stage.
   Future<void> leaveLiveStage(int liveId) => post('/live/$liveId/guests/leave');
 
-  Future<String> myGuestStatus(int liveId) async =>
-      (await get('/live/$liveId/guests/me') as Map)['status'] as String;
-
-  /// Host: requests and guests.
-  Future<List<LiveGuest>> liveGuests(int liveId) async =>
-      _guests(await get('/live/$liveId/guests') as Map<String, dynamic>);
-
-  /// Host: accept, decline or remove someone.
-  Future<List<LiveGuest>> answerGuest(
+  /// My status (none / requested / invited / active…) and whether the host turned off my mic or camera.
+  Future<({String status, bool micMuted, bool camOff})> myGuestState(
     int liveId,
-    int userId,
-    String action,
-  ) async => _guests(
-    await post('/live/$liveId/guests/$userId/$action') as Map<String, dynamic>,
+  ) async {
+    final j = await get('/live/$liveId/guests/me') as Map;
+    return (
+      status: j['status'] as String,
+      micMuted: (j['mic_muted'] as bool?) ?? false,
+      camOff: (j['cam_off'] as bool?) ?? false,
+    );
+  }
+
+  Future<String> myGuestStatus(int liveId) async =>
+      (await myGuestState(liveId)).status;
+
+  /// Host: requests, invitations, guests and the settings.
+  Future<GuestBoard> liveGuests(int liveId) async =>
+      GuestBoard(await get('/live/$liveId/guests') as Map<String, dynamic>);
+
+  /// Host: accept, decline, remove, invite, mute, unmute, camoff or camon.
+  Future<GuestBoard> answerGuest(int liveId, int userId, String action) async =>
+      GuestBoard(
+        await post('/live/$liveId/guests/$userId/$action')
+            as Map<String, dynamic>,
+      );
+
+  /// Host: panels (2, 4, 6, 9), who may ask (everyone, followers, off), auto-accept.
+  Future<GuestBoard> setGuestSettings(
+    int liveId, {
+    int? seats,
+    String? policy,
+    bool? autoAccept,
+  }) async => GuestBoard(
+    await post('/live/$liveId/guests/settings', {
+          'seats': ?seats,
+          'policy': ?policy,
+          'auto_accept': ?autoAccept,
+        })
+        as Map<String, dynamic>,
   );
 
-  List<LiveGuest> _guests(Map<String, dynamic> j) => [
-    for (final g in j['items'] as List)
-      LiveGuest(
-        AppUser.fromJson((g as Map)['user'] as Map<String, dynamic>),
-        g['status'] as String,
-      ),
-  ];
+  /// Everyone: guests on camera with their coins, and the layout.
+  Future<LiveStage> liveStage(int liveId) async =>
+      LiveStage(await get('/live/$liveId/stage') as Map<String, dynamic>);
 
   /// Accepted guest: a connection that may send camera and microphone.
   Future<({String url, String token})> guestTicket(int liveId) async {

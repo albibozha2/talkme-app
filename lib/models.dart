@@ -740,8 +740,12 @@ class LiveSession {
     this.following = false,
     this.guestsEnabled = false,
     this.guestStatus = 'none',
+    this.guestSettings,
   });
   final LiveInfo live;
+
+  /// Panels, who may ask to join and auto-accept, as the host set them.
+  final GuestSettings? guestSettings;
 
   /// Viewers may ask to join on camera; my request status (none, requested, active…).
   final bool guestsEnabled;
@@ -773,6 +777,9 @@ class LiveSession {
     following: (j['following'] as bool?) ?? false,
     guestsEnabled: (j['guests_enabled'] as bool?) ?? false,
     guestStatus: (j['guest_status'] as String?) ?? 'none',
+    guestSettings: j['guest_settings'] == null
+        ? null
+        : GuestSettings.fromJson(j['guest_settings'] as Map<String, dynamic>),
     comments: [
       for (final c in (j['comments'] as List?) ?? const [])
         LiveComment.fromJson(c as Map<String, dynamic>),
@@ -780,11 +787,78 @@ class LiveSession {
   );
 }
 
-/// Someone asking to join a live on camera (requested) or on it (active).
+/// Someone asking to join a live on camera (requested), invited by the host (invited) or on it (active).
 class LiveGuest {
-  LiveGuest(this.user, this.status);
+  LiveGuest(
+    this.user,
+    this.status, {
+    this.micMuted = false,
+    this.camOff = false,
+    this.coins = 0,
+  });
   final AppUser user;
   final String status;
+
+  /// Turned off by the host.
+  final bool micMuted, camOff;
+
+  /// Coins received in this live.
+  final int coins;
+
+  factory LiveGuest.fromJson(Map<String, dynamic> g) => LiveGuest(
+    AppUser.fromJson(g['user'] as Map<String, dynamic>),
+    g['status'] as String,
+    micMuted: (g['mic_muted'] as bool?) ?? false,
+    camOff: (g['cam_off'] as bool?) ?? false,
+    coins: (g['coins'] as int?) ?? 0,
+  );
+}
+
+/// The host's multi-guest settings: panels on screen (2, 4, 6 or 9, the host's included),
+/// who may ask to join (everyone, followers, off) and whether requests are accepted automatically.
+class GuestSettings {
+  const GuestSettings({
+    this.seats = 4,
+    this.policy = 'everyone',
+    this.autoAccept = false,
+  });
+  final int seats;
+  final String policy;
+  final bool autoAccept;
+
+  int get maxGuests => seats - 1;
+
+  factory GuestSettings.fromJson(Map<String, dynamic> j) => GuestSettings(
+    seats: (j['seats'] as int?) ?? 4,
+    policy: (j['policy'] as String?) ?? 'everyone',
+    autoAccept: (j['auto_accept'] as bool?) ?? false,
+  );
+}
+
+/// Host's view: requests, invitations and guests, plus the settings.
+class GuestBoard {
+  GuestBoard(Map<String, dynamic> j)
+    : items = [
+        for (final g in j['items'] as List)
+          LiveGuest.fromJson(g as Map<String, dynamic>),
+      ],
+      settings = GuestSettings.fromJson(j);
+  final List<LiveGuest> items;
+  final GuestSettings settings;
+}
+
+/// Everyone's view of the stage: guests on camera with their coins this live, the host's coins, the layout.
+class LiveStage {
+  LiveStage(Map<String, dynamic> j)
+    : guests = [
+        for (final g in j['guests'] as List)
+          LiveGuest.fromJson(g as Map<String, dynamic>),
+      ],
+      hostCoins = (j['host_coins'] as int?) ?? 0,
+      settings = GuestSettings.fromJson(j);
+  final List<LiveGuest> guests;
+  final int hostCoins;
+  final GuestSettings settings;
 }
 
 /// A saved live chat message or gift.
@@ -992,10 +1066,16 @@ class GiftEvent {
     this.senderAvatar,
     this.quantity = 1,
     this.senderLevel = 0,
+    this.toId,
+    this.toName,
   });
   final Gift gift;
   final String senderName;
   final String? senderAvatar;
+
+  /// Multi-guest live: the guest who got it (null: the host).
+  final int? toId;
+  final String? toName;
 
   /// x1 / x5 / x10 / x99 sent at once.
   final int quantity;

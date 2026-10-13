@@ -138,6 +138,17 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
   List<LiveGuest> _guestList = const [];
   Timer? _guestPoll;
 
+  /// Panels, who may ask to join, auto-accept (set by the host).
+  GuestSettings _guestSettings = const GuestSettings();
+
+  /// Guests on camera with their coins this live (everyone), refreshed when the stage changes.
+  LiveStage? _stage;
+  Timer? _stageTimer, _stageSoon;
+
+  /// Guest: the host turned off my microphone / camera.
+  bool _hostMutedMe = false, _hostCamOffMe = false;
+  bool _inviteOpen = false, _invitedAtJoin = false;
+
   bool get _canModerate => widget.isHost || _session?.role == 'mod';
   int? get _hostId => _live?.host.id;
 
@@ -160,6 +171,8 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
     _joinedTimer?.cancel();
     _likeTimer?.cancel();
     _guestPoll?.cancel();
+    _stageTimer?.cancel();
+    _stageSoon?.cancel();
     // Leaving the screen also leaves the stage / cancels a request.
     if (!widget.isHost && _guestStatus != 'none' && _live != null) {
       ref.read(apiProvider).leaveLiveStage(_live!.id).ignore();
@@ -189,6 +202,8 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                 session.guestStatus == 'requested'
             ? session.guestStatus
             : 'none';
+        _invitedAtJoin = session.guestStatus == 'invited';
+        _guestSettings = session.guestSettings ?? _guestSettings;
         _myLevel = widget.isHost
             ? (ref.read(sessionProvider).value?.level ?? 0)
             : session.level;
@@ -243,6 +258,12 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
         ..on<LocalTrackPublishedEvent>((_) => setState(() {}))
         ..on<LocalTrackUnpublishedEvent>((_) => setState(() {}))
         ..on<TrackMutedEvent>((_) => setState(() {}))
+        // The green ring around whoever is talking on the guest grid.
+        ..on<ActiveSpeakersChangedEvent>((_) {
+          if (mounted && _stage != null && _stage!.guests.isNotEmpty) {
+            setState(() {});
+          }
+        })
         ..on<TrackUnmutedEvent>((_) => setState(() {}))
         ..on<DataReceivedEvent>(_onData)
         ..on<RoomDisconnectedEvent>((_) {
@@ -304,7 +325,14 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
         _goOnStage(); // came back to a live where I'm still a guest
       } else if (_guestStatus == 'requested') {
         _pollGuestStatus();
+      } else if (_invitedAtJoin) {
+        _askInvite();
       }
+      _loadStage();
+      _stageTimer = Timer.periodic(
+        const Duration(seconds: 15),
+        (_) => _loadStage(),
+      );
       _loadTop();
       _topTimer = Timer.periodic(
         const Duration(seconds: 30),
@@ -369,10 +397,12 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
             _loadGuests();
             showToast(context, tr('{0} wants to join your live', [name]));
           }
-        case 'guestoff':
+        case 'guestoff' || 'gjoined':
           if (widget.isHost) _loadGuests();
+          _refreshStageSoon();
         case 'guest':
           // The host accepted or removed someone; act if it's me.
+          _refreshStageSoon();
           if (e.participant?.identity == _hostIdentity &&
               (m['id'] as num?)?.toInt() == me &&
               !widget.isHost) {
@@ -381,6 +411,31 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
             } else {
               _leaveStage(tellServer: false, removed: true);
             }
+          }
+        case 'ginvite':
+          // The host invited me on camera.
+          if (e.participant?.identity == _hostIdentity &&
+              (m['id'] as num?)?.toInt() == me &&
+              !widget.isHost) {
+            _askInvite();
+          }
+        case 'gctl':
+          // The host turned someone's microphone / camera off or on.
+          if (e.participant?.identity == _hostIdentity) {
+            _refreshStageSoon();
+            if ((m['id'] as num?)?.toInt() == me && !widget.isHost) {
+              _applyHostControl(m['mic'] == true, m['cam'] == true);
+            }
+          }
+        case 'gset':
+          if (e.participant?.identity == _hostIdentity && !widget.isHost) {
+            setState(
+              () => _guestSettings = GuestSettings(
+                seats: (m['seats'] as num?)?.toInt() ?? _guestSettings.seats,
+                policy: (m['policy'] as String?) ?? _guestSettings.policy,
+                autoAccept: m['auto'] == true,
+              ),
+            );
           }
         case 'pk':
           // Battle scores from the host (only the host may send these).
@@ -466,10 +521,14 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
               senderLevel: level,
             ),
           );
+          final toName = m['tn'] as String?;
+          if (toName != null) _refreshStageSoon();
           _addLine(
             _ChatLine(
               name,
-              _sentText(gift.name, q),
+              toName == null
+                  ? _sentText(gift.name, q)
+                  : '${_sentText(gift.name, q)} ${tr('to {0}', [toName])}',
               gift: gift.icon,
               userId: uid,
               username: uname,
@@ -550,9 +609,225 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
     final live = _live;
     if (live == null || !widget.isHost) return;
     try {
-      final list = await ref.read(apiProvider).liveGuests(live.id);
-      if (mounted) setState(() => _guestList = list);
+      final board = await ref.read(apiProvider).liveGuests(live.id);
+      if (mounted) {
+        setState(() {
+          _guestList = board.items;
+          _guestSettings = board.settings;
+        });
+      }
     } catch (_) {}
+  }
+
+  /// Who is on camera and their coins this live (everyone sees the scores on the grid).
+  Future<void> _loadStage() async {
+    final live = _live;
+    if (live == null) return;
+    try {
+      final st = await ref.read(apiProvider).liveStage(live.id);
+      if (mounted) {
+        setState(() {
+          _stage = st;
+          _guestSettings = st.settings;
+        });
+      }
+    } catch (_) {}
+  }
+
+  /// Many gifts can arrive at once: refresh the stage once they settle.
+  void _refreshStageSoon() {
+    _stageSoon?.cancel();
+    _stageSoon = Timer(const Duration(milliseconds: 1200), _loadStage);
+  }
+
+  /// The host invited me to join on camera.
+  Future<void> _askInvite() async {
+    final live = _live;
+    if (live == null || _inviteOpen || _onStage || widget.isHost) return;
+    _inviteOpen = true;
+    HapticFeedback.mediumImpact();
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: Avatar(
+          url: live.host.avatarUrl,
+          name: live.host.displayName,
+          radius: 28,
+        ),
+        title: Text(
+          tr('{0} invited you to join on camera', [live.host.displayName]),
+          textAlign: TextAlign.center,
+        ),
+        content: Text(
+          tr(
+            'Your camera and microphone turn on and everyone in the live can see and hear you.',
+          ),
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(tr('Not now')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(tr('Join')),
+          ),
+        ],
+      ),
+    );
+    _inviteOpen = false;
+    if (!mounted) return;
+    final api = ref.read(apiProvider);
+    try {
+      if (yes == true) {
+        final status = await api.requestToJoinLive(live.id);
+        if (!mounted) return;
+        setState(() => _guestStatus = status);
+        if (status == 'active') {
+          _broadcast({'t': 'gjoined'});
+          _goOnStage();
+        } else {
+          _broadcast({'t': 'guestreq'});
+          _pollGuestStatus();
+        }
+      } else {
+        await api.leaveLiveStage(live.id);
+        _broadcast({'t': 'guestoff'});
+      }
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  /// Guest: the host turned my microphone / camera off (or back on).
+  Future<void> _applyHostControl(bool micMuted, bool camOff) async {
+    final wasMuted = _hostMutedMe, wasOff = _hostCamOffMe;
+    setState(() {
+      _hostMutedMe = micMuted;
+      _hostCamOffMe = camOff;
+    });
+    final lp = _room.localParticipant;
+    if (lp == null || !_onStage) return;
+    try {
+      if (micMuted) {
+        await lp.setMicrophoneEnabled(false);
+      } else if (wasMuted) {
+        await lp.setMicrophoneEnabled(true);
+      }
+      if (camOff) {
+        await lp.setCameraEnabled(false);
+      } else if (wasOff) {
+        await lp.setCameraEnabled(true);
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    if (micMuted && !wasMuted) {
+      showToast(context, tr('The host turned off your microphone'));
+    } else if (!micMuted && wasMuted) {
+      showToast(context, tr('The host turned your microphone back on'));
+    }
+    if (camOff && !wasOff) {
+      showToast(context, tr('The host turned off your camera'));
+    }
+    setState(() {});
+  }
+
+  /// Guest: my own camera on / off.
+  Future<void> _toggleMyCamera() async {
+    final lp = _room.localParticipant;
+    if (lp == null) return;
+    if (_hostCamOffMe) {
+      showToast(context, tr('The host turned off your camera'));
+      return;
+    }
+    try {
+      await lp.setCameraEnabled(!lp.isCameraEnabled());
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// Guest: my own microphone on / off (not while the host has it off).
+  Future<void> _toggleMyMic() async {
+    final lp = _room.localParticipant;
+    if (lp == null) return;
+    if (_hostMutedMe) {
+      showToast(context, tr('The host turned off your microphone'));
+      return;
+    }
+    await lp.setMicrophoneEnabled(!lp.isMicrophoneEnabled());
+    if (mounted) setState(() {});
+  }
+
+  /// Host: act on a guest and tell everyone in the live.
+  Future<bool> _guestAction(int userId, String action) async {
+    final live = _live;
+    if (live == null) return false;
+    try {
+      final board = await ref
+          .read(apiProvider)
+          .answerGuest(live.id, userId, action);
+      if (!mounted) return false;
+      setState(() {
+        _guestList = board.items;
+        _guestSettings = board.settings;
+      });
+      final g = board.items.where((x) => x.user.id == userId).firstOrNull;
+      switch (action) {
+        case 'accept' || 'remove':
+          _broadcast({'t': 'guest', 'id': userId, 'on': action == 'accept'});
+        case 'invite':
+          _broadcast({'t': 'ginvite', 'id': userId});
+          showToast(context, tr('Invitation sent'));
+        case 'mute' || 'unmute' || 'camoff' || 'camon':
+          _broadcast({
+            't': 'gctl',
+            'id': userId,
+            'mic': g?.micMuted ?? false,
+            'cam': g?.camOff ?? false,
+          });
+      }
+      _refreshStageSoon();
+      return true;
+    } catch (e) {
+      if (mounted) showError(context, e);
+      return false;
+    }
+  }
+
+  /// Host: change the layout / who may ask / auto-accept, and tell the viewers.
+  Future<void> _saveGuestSettings({
+    int? seats,
+    String? policy,
+    bool? autoAccept,
+  }) async {
+    final live = _live;
+    if (live == null) return;
+    try {
+      final board = await ref
+          .read(apiProvider)
+          .setGuestSettings(
+            live.id,
+            seats: seats,
+            policy: policy,
+            autoAccept: autoAccept,
+          );
+      if (!mounted) return;
+      setState(() {
+        _guestList = board.items;
+        _guestSettings = board.settings;
+      });
+      _broadcast({
+        't': 'gset',
+        'seats': board.settings.seats,
+        'policy': board.settings.policy,
+        'auto': board.settings.autoAccept,
+      });
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
   }
 
   /// Viewer: ask to join the host on camera (or cancel / leave).
@@ -624,7 +899,8 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
       final status = await ref.read(apiProvider).requestToJoinLive(live.id);
       if (!mounted) return;
       setState(() => _guestStatus = status);
-      _broadcast({'t': 'guestreq'});
+      // Auto-accepted: straight on camera; otherwise the host gets the request.
+      _broadcast({'t': status == 'active' ? 'gjoined' : 'guestreq'});
       if (status == 'active') {
         _goOnStage();
       } else {
@@ -669,6 +945,8 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
     setState(() {
       _guestStatus = 'active';
       _onStage = true;
+      _hostMutedMe = false;
+      _hostCamOffMe = false;
     });
     HapticFeedback.mediumImpact();
     final lp = _room.localParticipant;
@@ -733,118 +1011,246 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
     }
   }
 
-  /// Host: who's asking to join, and who's on camera.
+  /// Host: the multi-guest panel. Layout (2/4/6/9 panels), who may ask to join, auto-accept,
+  /// guests on camera with their controls, requests, invitations, and inviting viewers.
   Future<void> _guestsSheet() async {
     await _loadGuests();
     if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      showDragHandle: true,
       builder: (context) => StatefulBuilder(
         builder: (context, setSheet) {
           Future<void> act(LiveGuest g, String action) async {
-            try {
-              final list = await ref
-                  .read(apiProvider)
-                  .answerGuest(_live!.id, g.user.id, action);
-              setState(() => _guestList = list);
-              setSheet(() {});
-              _broadcast({
-                't': 'guest',
-                'id': g.user.id,
-                'on': action == 'accept',
-              });
-            } catch (e) {
-              if (context.mounted) showError(context, e);
-            }
+            if (await _guestAction(g.user.id, action)) setSheet(() {});
           }
 
+          Future<void> save({int? seats, String? policy, bool? auto}) async {
+            await _saveGuestSettings(
+              seats: seats,
+              policy: policy,
+              autoAccept: auto,
+            );
+            setSheet(() {});
+          }
+
+          final st = _guestSettings;
           final active = _guestList.where((g) => g.status == 'active').toList();
           final asking = _guestList
               .where((g) => g.status == 'requested')
               .toList();
+          final invited = _guestList
+              .where((g) => g.status == 'invited')
+              .toList();
+          Widget person(LiveGuest g, String subtitle, Widget trailing) =>
+              ListTile(
+                leading: Avatar(
+                  url: g.user.avatarUrl,
+                  name: g.user.displayName,
+                  radius: 20,
+                ),
+                title: Text(
+                  g.user.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(subtitle),
+                trailing: trailing,
+              );
+          Widget heading(String text) => Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+            child: Text(
+              text,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          );
           return SafeArea(
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(context).height * .7,
+                maxHeight: MediaQuery.sizeOf(context).height * .8,
               ),
               child: ListView(
                 shrinkWrap: true,
-                padding: const EdgeInsets.fromLTRB(0, 16, 0, 8),
+                padding: const EdgeInsets.only(bottom: 12),
                 children: [
-                  ListTile(
-                    title: Text(
-                      tr('Guests ({0}/3)', [active.length]),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Text(
+                      tr('Multi-guest'),
                       style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                      ),
-                    ),
-                    subtitle: Text(
-                      tr(
-                        'Viewers can ask to join you on camera. Up to 3 at a time.',
+                        fontWeight: FontWeight.w900,
+                        fontSize: 20,
                       ),
                     ),
                   ),
+                  heading(tr('Layout')),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: SegmentedButton<int>(
+                      segments: [
+                        for (final n in const [2, 4, 6, 9])
+                          ButtonSegment(
+                            value: n,
+                            icon: Icon(switch (n) {
+                              2 => Icons.splitscreen_rounded,
+                              4 => Icons.grid_view_rounded,
+                              6 => Icons.view_module_rounded,
+                              _ => Icons.apps_rounded,
+                            }),
+                            label: Text('$n'),
+                          ),
+                      ],
+                      selected: {st.seats},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (s) => save(seats: s.first),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                    child: Text(
+                      tr('Up to {0} guests on camera with you.', [
+                        st.maxGuests,
+                      ]),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+                  heading(tr('Who can ask to join')),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: SegmentedButton<String>(
+                      segments: [
+                        ButtonSegment(
+                          value: 'everyone',
+                          label: Text(tr('Everyone')),
+                        ),
+                        ButtonSegment(
+                          value: 'followers',
+                          label: Text(tr('Followers')),
+                        ),
+                        ButtonSegment(value: 'off', label: Text(tr('Nobody'))),
+                      ],
+                      selected: {st.policy},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (s) => save(policy: s.first),
+                    ),
+                  ),
+                  SwitchListTile(
+                    value: st.autoAccept,
+                    onChanged: st.policy == 'off' ? null : (v) => save(auto: v),
+                    title: Text(tr('Accept requests automatically')),
+                    subtitle: Text(
+                      tr('People who ask take a free seat right away.'),
+                    ),
+                  ),
+                  const Divider(),
+                  heading(
+                    tr('On camera ({0}/{1})', [active.length, st.maxGuests]),
+                  ),
                   for (final g in active)
-                    ListTile(
-                      leading: Avatar(
-                        url: g.user.avatarUrl,
-                        name: g.user.displayName,
-                        radius: 20,
-                      ),
-                      title: Text(g.user.displayName),
-                      subtitle: Text(tr('On camera')),
-                      trailing: OutlinedButton(
-                        onPressed: () => act(g, 'remove'),
-                        child: Text(tr('Remove')),
-                      ),
-                    ),
-                  if (asking.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                      child: Text(
-                        tr('Asking to join'),
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  for (final g in asking)
-                    ListTile(
-                      leading: Avatar(
-                        url: g.user.avatarUrl,
-                        name: g.user.displayName,
-                        radius: 20,
-                      ),
-                      title: Text(g.user.displayName),
-                      subtitle: Text('@${g.user.username}'),
-                      trailing: Row(
+                    person(
+                      g,
+                      tr('{0} coins in this live', [compactCount(g.coins)]),
+                      Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            tooltip: tr('Decline'),
-                            onPressed: () => act(g, 'decline'),
-                            icon: const Icon(Icons.close_rounded),
+                            tooltip: g.micMuted
+                                ? tr('Turn their microphone on')
+                                : tr('Mute their microphone'),
+                            onPressed: () =>
+                                act(g, g.micMuted ? 'unmute' : 'mute'),
+                            icon: Icon(
+                              g.micMuted
+                                  ? Icons.mic_off_rounded
+                                  : Icons.mic_rounded,
+                              color: g.micMuted ? AppColors.like : null,
+                            ),
                           ),
-                          IconButton.filled(
-                            tooltip: tr('Accept'),
-                            onPressed: active.length >= 3
-                                ? null
-                                : () => act(g, 'accept'),
-                            icon: const Icon(Icons.check_rounded),
+                          IconButton(
+                            tooltip: g.camOff
+                                ? tr('Turn their camera on')
+                                : tr('Turn their camera off'),
+                            onPressed: () =>
+                                act(g, g.camOff ? 'camon' : 'camoff'),
+                            icon: Icon(
+                              g.camOff
+                                  ? Icons.videocam_off_rounded
+                                  : Icons.videocam_rounded,
+                              color: g.camOff ? AppColors.like : null,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: tr('Remove from camera'),
+                            onPressed: () => act(g, 'remove'),
+                            icon: const Icon(Icons.logout_rounded),
                           ),
                         ],
                       ),
                     ),
-                  if (asking.isEmpty && active.isEmpty)
+                  if (active.isEmpty)
                     Padding(
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
                       child: Text(
-                        tr(
-                          'Nobody has asked yet. Tell your viewers to tap the join button.',
+                        tr('Nobody yet. Invite viewers or wait for requests.'),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
-                        textAlign: TextAlign.center,
                       ),
                     ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: OutlinedButton.icon(
+                      onPressed: active.length >= st.maxGuests
+                          ? null
+                          : () async {
+                              await _inviteSheet();
+                              setSheet(() {});
+                            },
+                      icon: const Icon(Icons.person_add_alt_1_rounded),
+                      label: Text(tr('Invite viewers')),
+                    ),
+                  ),
+                  if (asking.isNotEmpty) ...[
+                    heading(tr('Asking to join ({0})', [asking.length])),
+                    for (final g in asking)
+                      person(
+                        g,
+                        '@${g.user.username}',
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: tr('Decline'),
+                              onPressed: () => act(g, 'decline'),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                            IconButton.filled(
+                              tooltip: tr('Accept'),
+                              onPressed: active.length >= st.maxGuests
+                                  ? null
+                                  : () => act(g, 'accept'),
+                              icon: const Icon(Icons.check_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                  if (invited.isNotEmpty) ...[
+                    heading(tr('Invited')),
+                    for (final g in invited)
+                      person(
+                        g,
+                        tr('Waiting for them to answer'),
+                        TextButton(
+                          onPressed: () => act(g, 'decline'),
+                          child: Text(tr('Cancel')),
+                        ),
+                      ),
+                  ],
                 ],
               ),
             ),
@@ -854,19 +1260,96 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
     );
   }
 
-  /// Everyone on camera besides the host (up to 3), in a stable order.
+  /// Host: invite someone who is watching to join on camera.
+  Future<void> _inviteSheet() async {
+    final busy = {
+      for (final g in _guestList)
+        if (g.status == 'active' || g.status == 'invited') 'u${g.user.id}',
+    };
+    final people = _room.remoteParticipants.values
+        .where((p) => p.identity != _hostIdentity && !busy.contains(p.identity))
+        .toList();
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheet) => SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * .6,
+            ),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+                  child: Text(
+                    tr('Invite to join on camera'),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                for (final p in people)
+                  ListTile(
+                    leading: Avatar(
+                      url: null,
+                      name: p.name.isEmpty ? p.identity : p.name,
+                      radius: 18,
+                    ),
+                    title: Text(p.name.isEmpty ? tr('Someone') : p.name),
+                    trailing: busy.contains(p.identity)
+                        ? Text(tr('Invited'))
+                        : FilledButton.tonal(
+                            onPressed: () async {
+                              final uid = int.tryParse(p.identity.substring(1));
+                              if (uid == null) return;
+                              if (await _guestAction(uid, 'invite')) {
+                                setSheet(() => busy.add(p.identity));
+                              }
+                            },
+                            child: Text(tr('Invite')),
+                          ),
+                  ),
+                if (people.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      tr('Nobody else is watching right now.'),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Everyone on camera besides the host (up to 8), in a stable order. Someone whose camera
+  /// is off still keeps their seat (avatar), as long as they are on stage.
   List<_StageTile> get _stageTiles {
     final tiles = <_StageTile>[];
+    final onStage = {
+      for (final g in _stage?.guests ?? const <LiveGuest>[]) g.user.id: g,
+    };
+    if (widget.isHost) {
+      for (final g in _guestList.where((g) => g.status == 'active')) {
+        onStage.putIfAbsent(g.user.id, () => g);
+      }
+    }
     final lp = _room.localParticipant;
     if (!widget.isHost && _onStage && lp != null) {
       final t = lp.videoTrackPublications.firstOrNull?.track;
+      final id = int.tryParse(lp.identity.substring(1));
       tiles.add(
         _StageTile(
           lp.identity,
           _myName,
-          t is VideoTrack ? t : null,
+          t is VideoTrack && lp.isCameraEnabled() ? t : null,
           micOn: lp.isMicrophoneEnabled(),
           local: true,
+          speaking: lp.isSpeaking,
+          coins: onStage[id]?.coins ?? 0,
         ),
       );
     }
@@ -874,38 +1357,223 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
       if (p.identity == _hostIdentity) continue;
       VideoTrack? track;
       for (final pub in p.videoTrackPublications) {
-        if (pub.subscribed && pub.track != null) track = pub.track;
+        if (pub.subscribed && pub.track != null && !pub.muted) {
+          track = pub.track;
+        }
       }
-      if (track == null && !p.isCameraEnabled()) continue;
+      final id = int.tryParse(p.identity.substring(1));
+      if (track == null && !onStage.containsKey(id)) continue;
       tiles.add(
         _StageTile(
           p.identity,
-          p.name.isEmpty ? tr('Guest') : p.name,
+          p.name.isEmpty
+              ? (onStage[id]?.user.displayName ?? tr('Guest'))
+              : p.name,
           track,
           micOn: p.isMicrophoneEnabled(),
+          speaking: p.isSpeaking,
+          coins: onStage[id]?.coins ?? 0,
+          avatarUrl: onStage[id]?.user.avatarUrl,
         ),
       );
     }
     tiles.sort((a, b) => a.identity.compareTo(b.identity));
-    return tiles.take(3).toList();
+    return tiles.take(8).toList();
   }
 
-  /// Where seat [i] of [n] sits on screen (seat 0 is the host). 2 people side by side,
-  /// 3–4 in a 2x2 grid, like TikTok's multi-guest live.
+  /// Panels on screen for [people] (host included): grows 2 → 4 → 6 → 9 as people join, with one
+  /// open seat while there's room, up to the layout the host chose.
+  int _panelsFor(int people) {
+    final cap = max(_guestSettings.seats, people);
+    final open = people < _guestSettings.seats && _guestSettings.policy != 'off'
+        ? 1
+        : 0;
+    for (final c in const [2, 4, 6, 9]) {
+      if (c >= people + open && c <= max(cap, 2)) return c;
+    }
+    return people <= 2
+        ? 2
+        : people <= 4
+        ? 4
+        : people <= 6
+        ? 6
+        : 9;
+  }
+
+  /// Where seat [i] of [n] sits on screen (seat 0 is the host): 2 side by side, 4 in a 2x2 grid,
+  /// 6 in 3x2 and 9 in 3x3, like TikTok's multi-guest live.
   Rect _seat(int i, int n, Size size, EdgeInsets pad) {
     final top = pad.top + 92;
-    final w = size.width / 2;
-    if (n <= 2) {
-      final h = (w * 4 / 3).clamp(160.0, size.height * .46);
-      return Rect.fromLTWH(i * w + (i > 0 ? 1 : 0), top, w - 1, h);
-    }
-    final h = (w * 1.0).clamp(130.0, size.height * .27);
-    final col = i % 2, row = i ~/ 2;
+    final cols = n <= 4 ? 2 : 3;
+    final w = size.width / cols;
+    final double h = switch (n) {
+      <= 2 => (w * 4 / 3).clamp(160.0, size.height * .46),
+      <= 4 => (w * 1.0).clamp(130.0, size.height * .27),
+      <= 6 => (w * 1.25).clamp(120.0, size.height * .27),
+      _ => (w * 1.0).clamp(100.0, size.height * .19),
+    };
+    final col = i % cols, row = i ~/ cols;
     return Rect.fromLTWH(
       col * w + (col > 0 ? 1 : 0),
       top + row * (h + 2),
       w - 1,
       h,
+    );
+  }
+
+  /// Tap on a guest: the host gets their controls; viewers can see the profile or send them a gift.
+  Future<void> _seatTapped(_StageTile tile) async {
+    final uid = int.tryParse(tile.identity.substring(1));
+    final live = _live;
+    if (uid == null || live == null) return;
+    if (widget.isHost) {
+      await _guestControls(uid);
+      return;
+    }
+    final me = ref.read(sessionProvider).value?.id;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Avatar(url: tile.avatarUrl, name: tile.name, radius: 22),
+              title: Text(
+                tile.name,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text(
+                tr('{0} coins in this live', [compactCount(tile.coins)]),
+              ),
+            ),
+            if (uid != me)
+              ListTile(
+                leading: const Icon(Icons.card_giftcard_rounded),
+                title: Text(tr('Send a gift to {0}', [tile.name])),
+                onTap: () {
+                  Navigator.pop(context);
+                  _gift(to: uid);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.person_rounded),
+              title: Text(tr('View profile')),
+              onTap: () async {
+                Navigator.pop(context);
+                final u = _stage?.guests
+                    .where((g) => g.user.id == uid)
+                    .firstOrNull
+                    ?.user;
+                if (u == null) return;
+                await Navigator.of(this.context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ProfileScreen(username: u.username),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Host: one guest's controls (microphone, camera, profile, remove).
+  Future<void> _guestControls(int uid) async {
+    await _loadGuests();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheet) {
+          final g = _guestList.where((x) => x.user.id == uid).firstOrNull;
+          if (g == null || g.status != 'active') {
+            return Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(tr('They are not on camera any more.')),
+            );
+          }
+          Future<void> act(String action) async {
+            if (await _guestAction(uid, action)) setSheet(() {});
+          }
+
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Avatar(
+                    url: g.user.avatarUrl,
+                    name: g.user.displayName,
+                    radius: 22,
+                  ),
+                  title: Text(
+                    g.user.displayName,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: Text(
+                    tr('{0} coins in this live', [compactCount(g.coins)]),
+                  ),
+                ),
+                ListTile(
+                  leading: Icon(
+                    g.micMuted ? Icons.mic_rounded : Icons.mic_off_rounded,
+                  ),
+                  title: Text(
+                    g.micMuted
+                        ? tr('Turn their microphone on')
+                        : tr('Mute their microphone'),
+                  ),
+                  onTap: () => act(g.micMuted ? 'unmute' : 'mute'),
+                ),
+                ListTile(
+                  leading: Icon(
+                    g.camOff
+                        ? Icons.videocam_rounded
+                        : Icons.videocam_off_rounded,
+                  ),
+                  title: Text(
+                    g.camOff
+                        ? tr('Turn their camera on')
+                        : tr('Turn their camera off'),
+                  ),
+                  onTap: () => act(g.camOff ? 'camon' : 'camoff'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.person_rounded),
+                  title: Text(tr('View profile')),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.of(this.context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            ProfileScreen(username: g.user.username),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.logout_rounded,
+                    color: AppColors.like,
+                  ),
+                  title: Text(
+                    tr('Remove from camera'),
+                    style: const TextStyle(color: AppColors.like),
+                  ),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _guestAction(uid, 'remove');
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -1094,10 +1762,34 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
     }
   }
 
-  Future<void> _gift() async {
+  /// Gift sheet; in a multi-guest live the gift can go to the host or one of the guests ([to]).
+  Future<void> _gift({int? to}) async {
     final live = _live;
     if (live == null) return;
-    await showGiftSheet(context, liveId: live.id, onSent: _announceGift);
+    final me = ref.read(sessionProvider).value?.id;
+    final guests = (_stage?.guests ?? const <LiveGuest>[])
+        .where((g) => g.user.id != me)
+        .toList();
+    await showGiftSheet(
+      context,
+      liveId: live.id,
+      to: to,
+      recipients: guests.isEmpty
+          ? const []
+          : [
+              GiftRecipient(
+                name: live.host.displayName,
+                avatarUrl: live.host.avatarUrl,
+              ),
+              for (final g in guests)
+                GiftRecipient(
+                  id: g.user.id,
+                  name: g.user.displayName,
+                  avatarUrl: g.user.avatarUrl,
+                ),
+            ],
+      onSent: _announceGift,
+    );
   }
 
   /// "sent Rose" / "sent Rose x10".
@@ -1111,11 +1803,14 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
     _addLine(
       _ChatLine(
         _myName,
-        _sentText(sent.gift.name, sent.quantity),
+        sent.toName == null
+            ? _sentText(sent.gift.name, sent.quantity)
+            : '${_sentText(sent.gift.name, sent.quantity)} ${tr('to {0}', [sent.toName!])}',
         gift: sent.gift.icon,
         level: _myLevel,
       ),
     );
+    if (sent.toId != null) _refreshStageSoon();
     setState(() {
       _giftCoins += sent.total;
       _goalProgress += sent.total;
@@ -1126,6 +1821,8 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
       'i': sent.gift.icon,
       'c': sent.gift.coins,
       if (sent.quantity > 1) 'q': sent.quantity,
+      if (sent.toId != null) 'to': sent.toId,
+      if (sent.toName != null) 'tn': sent.toName,
     });
     if (_inBattle) _battleKey.currentState?.refresh();
     _loadTop();
@@ -1467,8 +2164,21 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
     final screen = MediaQuery.sizeOf(context);
     final guests = _inBattle ? const <_StageTile>[] : _stageTiles;
     final stage = guests.isNotEmpty;
-    final seats = stage ? (guests.length + 1 <= 2 ? 2 : 4) : 1;
+    // Panels on screen: grows as people join, up to the layout the host chose (2, 4, 6 or 9).
+    final seats = stage ? _panelsFor(guests.length + 1) : 1;
     final asking = _guestList.where((g) => g.status == 'requested').length;
+    final canAsk =
+        !widget.isHost &&
+        _guestStatus == 'none' &&
+        _guestSettings.policy != 'off' &&
+        (_session?.guestsEnabled ?? false);
+    final hostSpeaking = widget.isHost
+        ? (_room.localParticipant?.isSpeaking ?? false)
+        : (_room.remoteParticipants.values
+                  .where((p) => p.identity == _hostIdentity)
+                  .firstOrNull
+                  ?.isSpeaking ??
+              false);
     final viewers = widget.isHost
         ? _room.remoteParticipants.length
         : max(0, _room.remoteParticipants.length);
@@ -1534,41 +2244,7 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                   Positioned.fromRect(
                     key: ValueKey('seat-${guests[i].identity}'),
                     rect: _seat(i + 1, seats, screen, pad),
-                    child: _GuestSeat(
-                      tile: guests[i],
-                      onRemove: widget.isHost
-                          ? () {
-                              final uid = int.tryParse(
-                                guests[i].identity.substring(1),
-                              );
-                              final g = _guestList
-                                  .where((x) => x.user.id == uid)
-                                  .firstOrNull;
-                              if (g == null) return;
-                              ref
-                                  .read(apiProvider)
-                                  .answerGuest(_live!.id, g.user.id, 'remove')
-                                  .then((l) {
-                                    if (mounted) setState(() => _guestList = l);
-                                  })
-                                  .ignore();
-                              _broadcast({
-                                't': 'guest',
-                                'id': g.user.id,
-                                'on': false,
-                              });
-                            }
-                          : null,
-                    ),
-                  ),
-                // An open seat invites viewers to ask (TikTok shows "+" seats).
-                if (stage &&
-                    guests.length == 2 &&
-                    !widget.isHost &&
-                    _guestStatus == 'none')
-                  Positioned.fromRect(
-                    rect: _seat(3, seats, screen, pad),
-                    child: _OpenSeat(onTap: _stageButton),
+                    child: _GuestSeat(tile: guests[i]),
                   ),
                 // The host's name on their seat in the grid.
                 if (stage && live != null)
@@ -1579,6 +2255,22 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                       child: _SeatName(name: live.host.displayName, host: true),
                     ),
                   ),
+                // The host's coins this live, and a green ring while they talk.
+                if (stage && live != null) ...[
+                  Positioned(
+                    left: _seat(0, seats, screen, pad).left + 6,
+                    top: _seat(0, seats, screen, pad).top + 6,
+                    child: IgnorePointer(
+                      child: _SeatCoins(coins: _stage?.hostCoins ?? 0),
+                    ),
+                  ),
+                  Positioned.fromRect(
+                    rect: _seat(0, seats, screen, pad),
+                    child: IgnorePointer(
+                      child: _SpeakingRing(on: hostSpeaking),
+                    ),
+                  ),
+                ],
                 // Tap anywhere to like (viewers).
                 if (!widget.isHost && !_ended)
                   Positioned.fill(
@@ -1587,6 +2279,26 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                       onTap: _sendHeart,
                     ),
                   ),
+                // Tap a guest: the host gets their controls, viewers can send them a gift.
+                for (var i = 0; i < guests.length; i++)
+                  Positioned.fromRect(
+                    rect: _seat(i + 1, seats, screen, pad),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _seatTapped(guests[i]),
+                    ),
+                  ),
+                // Open seats ("+"): viewers ask to join, the host invites someone.
+                if (stage)
+                  for (var i = guests.length + 1; i < seats; i++)
+                    if (widget.isHost || canAsk)
+                      Positioned.fromRect(
+                        rect: _seat(i, seats, screen, pad),
+                        child: _OpenSeat(
+                          label: widget.isHost ? tr('Invite') : tr('Join'),
+                          onTap: widget.isHost ? _inviteSheet : _stageButton,
+                        ),
+                      ),
                 if (live != null && !_ended)
                   BattleLayer(
                     key: _battleKey,
@@ -1754,7 +2466,7 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                     ),
                   ),
                 ),
-                if (live != null && live.title.isNotEmpty && !_inBattle)
+                if (live != null && live.title.isNotEmpty && !_inBattle && !stage)
                   Positioned(
                     top: pad.top + 92,
                     left: 14,
@@ -2055,13 +2767,17 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                                           false
                                       ? Icons.mic_rounded
                                       : Icons.mic_off_rounded,
-                                  onTap: () async {
-                                    final lp = _room.localParticipant;
-                                    await lp?.setMicrophoneEnabled(
-                                      !(lp.isMicrophoneEnabled()),
-                                    );
-                                    setState(() {});
-                                  },
+                                  onTap: _toggleMyMic,
+                                ),
+                                const SizedBox(width: 8),
+                                _CircleButton(
+                                  icon:
+                                      _room.localParticipant
+                                              ?.isCameraEnabled() ??
+                                          false
+                                      ? Icons.videocam_rounded
+                                      : Icons.videocam_off_rounded,
+                                  onTap: _toggleMyCamera,
                                 ),
                                 const SizedBox(width: 8),
                                 _CircleButton(
@@ -2070,7 +2786,9 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                                   onTap: _stageButton,
                                 ),
                               ] else ...[
-                                if (_session?.guestsEnabled ?? false) ...[
+                                if ((_session?.guestsEnabled ?? false) &&
+                                    (_guestSettings.policy != 'off' ||
+                                        _guestStatus != 'none')) ...[
                                   const SizedBox(width: 8),
                                   _CircleButton(
                                     icon: _guestStatus == 'requested'
@@ -2329,10 +3047,64 @@ class _StageTile {
     this.track, {
     this.micOn = true,
     this.local = false,
+    this.speaking = false,
+    this.coins = 0,
+    this.avatarUrl,
   });
   final String identity, name;
   final VideoTrack? track;
-  final bool micOn, local;
+  final bool micOn, local, speaking;
+
+  /// Coins they got in this live.
+  final int coins;
+  final String? avatarUrl;
+}
+
+/// Coins a person on the grid got in this live (TikTok's score on each panel).
+class _SeatCoins extends StatelessWidget {
+  const _SeatCoins({required this.coins});
+  final int coins;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.fromLTRB(4, 2, 8, 2),
+    decoration: BoxDecoration(
+      color: Colors.black45,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const CoinIcon(size: 13),
+        const SizedBox(width: 3),
+        Text(
+          compactCount(coins),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Green ring around a panel while that person is talking.
+class _SpeakingRing extends StatelessWidget {
+  const _SpeakingRing({required this.on});
+  final bool on;
+
+  @override
+  Widget build(BuildContext context) => AnimatedContainer(
+    duration: const Duration(milliseconds: 180),
+    decoration: BoxDecoration(
+      border: Border.all(
+        color: on ? const Color(0xFF34D399) : Colors.transparent,
+        width: 2.5,
+      ),
+    ),
+  );
 }
 
 class _SeatName extends StatelessWidget {
@@ -2376,11 +3148,11 @@ class _SeatName extends StatelessWidget {
   );
 }
 
-/// One guest's video in the grid, with their name (and a remove button for the host).
+/// One guest's video in the grid: name, microphone, coins this live, and a ring while they talk.
+/// (Taps are handled by a layer above, so viewers' "tap to like" doesn't swallow them.)
 class _GuestSeat extends StatelessWidget {
-  const _GuestSeat({required this.tile, this.onRemove});
+  const _GuestSeat({required this.tile});
   final _StageTile tile;
-  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) => Stack(
@@ -2390,37 +3162,26 @@ class _GuestSeat extends StatelessWidget {
         color: const Color(0xFF151A2E),
         child: tile.track != null
             ? VideoTrackRenderer(tile.track!, fit: VideoViewFit.cover)
-            : Center(child: Avatar(url: null, name: tile.name, radius: 26)),
+            : Center(
+                child: Avatar(url: tile.avatarUrl, name: tile.name, radius: 26),
+              ),
       ),
       Positioned(
         left: 6,
         bottom: 6,
         child: _SeatName(name: tile.name, micOn: tile.micOn),
       ),
-      if (onRemove != null)
-        Positioned(
-          right: 2,
-          top: 2,
-          child: IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: tr('Remove'),
-            onPressed: onRemove,
-            icon: const Icon(
-              Icons.close_rounded,
-              color: Colors.white,
-              size: 18,
-              shadows: [Shadow(blurRadius: 6)],
-            ),
-          ),
-        ),
+      Positioned(left: 6, top: 6, child: _SeatCoins(coins: tile.coins)),
+      _SpeakingRing(on: tile.speaking),
     ],
   );
 }
 
 /// An empty seat in the grid: viewers tap it to ask to join.
 class _OpenSeat extends StatelessWidget {
-  const _OpenSeat({required this.onTap});
+  const _OpenSeat({required this.onTap, required this.label});
   final VoidCallback onTap;
+  final String label;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -2442,7 +3203,7 @@ class _OpenSeat extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              tr('Join'),
+              label,
               style: const TextStyle(color: Colors.white70, fontSize: 12.5),
             ),
           ],
