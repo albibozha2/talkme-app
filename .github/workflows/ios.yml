@@ -1,0 +1,39 @@
+# Builds an unsigned iPhone app (TalkMe.ipa) on GitHub's Mac machines.
+# Run it from the Actions tab → "iPhone IPA" → Run workflow, then download TalkMe-ipa when it's done.
+# Sideloadly signs it with your Apple ID when it installs it on the phone.
+name: iPhone IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.2
+          cache: true
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Build the app (no signing)
+        run: flutter build ios --release --no-codesign
+
+      - name: Pack TalkMe.ipa
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d' ' -f2 | cut -d+ -f1)
+          mkdir -p out/Payload
+          cp -R build/ios/iphoneos/Runner.app out/Payload/
+          cd out && zip -qry "TalkMe-$VERSION.ipa" Payload && ls -la
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TalkMe-ipa
+          path: out/*.ipa
+          retention-days: 14

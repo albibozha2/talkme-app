@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="TalkMe: short videos, live streams and gifts. Watch in your browser.">
+  <meta name="theme-color" content="#0B0F0E">
+
+  <!-- Installable app (iPhone: Share > Add to Home Screen; Android: Install app) -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="TalkMe">
+  <meta name="application-name" content="TalkMe">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>TalkMe</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    html, body { margin: 0; height: 100%; background: #0B0F0E; overscroll-behavior: none; }
+    /* Shown while the app downloads (a few seconds on a phone), removed when it starts. */
+    #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; }
+    #loading img { width: 200px; height: 200px; object-fit: contain; }
+    #loading .bar { width: 120px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; }
+    #loading .bar::after { content: ""; display: block; width: 40%; height: 100%; border-radius: 4px; background: #14A37F; animation: slide 1.1s ease-in-out infinite; }
+    @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+  </style>
+</head>
+<body>
+  <div id="loading"><img src="icons/splash.png" alt="TalkMe"><div class="bar"></div></div>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <script src="install-guide.js"></script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
