@@ -22,6 +22,7 @@ import 'profile_screen.dart';
 import '../i18n.dart';
 import 'leaderboard_screen.dart';
 import '../battery.dart';
+import '../features.dart';
 
 /// One live room, for the host (camera + mic) or a viewer.
 ///
@@ -2437,23 +2438,25 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                           text: tr('Top gifters'),
                           onTap: _showTop,
                         ),
-                        const SizedBox(width: 6),
-                        _TopChip(
-                          icon: Icons.leaderboard_rounded,
-                          color: AppColors.amber,
-                          text: _hourRank == null
-                              ? tr('Hourly ranking')
-                              : widget.isHost && _hourRank!.rank > 1
-                              ? tr('Hourly #{0} · +{1}', [
-                                  _hourRank!.rank,
-                                  compactCount(_hourRank!.gap),
-                                ])
-                              : tr('Hourly #{0}', [_hourRank!.rank]),
-                          onTap: () => showLiveRankings(
-                            context,
-                            highlight: _live?.host.id,
+                        if (Features.on('live_rankings')) ...[
+                          const SizedBox(width: 6),
+                          _TopChip(
+                            icon: Icons.leaderboard_rounded,
+                            color: AppColors.amber,
+                            text: _hourRank == null
+                                ? tr('Hourly ranking')
+                                : widget.isHost && _hourRank!.rank > 1
+                                ? tr('Hourly #{0} · +{1}', [
+                                    _hourRank!.rank,
+                                    compactCount(_hourRank!.gap),
+                                  ])
+                                : tr('Hourly #{0}', [_hourRank!.rank]),
+                            onTap: () => showLiveRankings(
+                              context,
+                              highlight: _live?.host.id,
+                            ),
                           ),
-                        ),
+                        ],
                         if (_likes > 0) ...[
                           const SizedBox(width: 6),
                           _TopChip(
@@ -2466,7 +2469,10 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                     ),
                   ),
                 ),
-                if (live != null && live.title.isNotEmpty && !_inBattle && !stage)
+                if (live != null &&
+                    live.title.isNotEmpty &&
+                    !_inBattle &&
+                    !stage)
                   Positioned(
                     top: pad.top + 92,
                     left: 14,
@@ -2735,10 +2741,11 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                _PkButton(
-                                  onTap: () =>
-                                      _battleKey.currentState?.openInvite(),
-                                ),
+                                if (Features.on('battles'))
+                                  _PkButton(
+                                    onTap: () =>
+                                        _battleKey.currentState?.openInvite(),
+                                  ),
                                 const SizedBox(width: 8),
                                 _CircleButton(
                                   icon: _micOn
@@ -2798,7 +2805,8 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                                     onTap: _stageButton,
                                   ),
                                 ],
-                                if (_quickGift != null) ...[
+                                if (_quickGift != null &&
+                                    Features.on('gifts')) ...[
                                   const SizedBox(width: 8),
                                   Tooltip(
                                     message:
@@ -2827,30 +2835,32 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                                     ),
                                   ),
                                 ],
-                                const SizedBox(width: 8),
-                                GestureDetector(
-                                  onTap: _gift,
-                                  child: Container(
-                                    width: 42,
-                                    height: 42,
-                                    decoration: BoxDecoration(
-                                      gradient: AppColors.goldGradient,
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppColors.amber.withValues(
-                                            alpha: .5,
+                                if (Features.on('gifts')) ...[
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: _gift,
+                                    child: Container(
+                                      width: 42,
+                                      height: 42,
+                                      decoration: BoxDecoration(
+                                        gradient: AppColors.goldGradient,
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: AppColors.amber.withValues(
+                                              alpha: .5,
+                                            ),
+                                            blurRadius: 14,
                                           ),
-                                          blurRadius: 14,
-                                        ),
-                                      ],
-                                    ),
-                                    child: const Icon(
-                                      Icons.card_giftcard_rounded,
-                                      color: Colors.white,
+                                        ],
+                                      ),
+                                      child: const Icon(
+                                        Icons.card_giftcard_rounded,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ),
-                                ),
+                                ],
                                 const SizedBox(width: 8),
                                 _CircleButton(
                                   icon: Icons.reply_rounded,

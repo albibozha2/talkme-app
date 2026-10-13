@@ -9,5 +9,5 @@ class AppConfig {
   );
 
   /// Must match `version:` in pubspec.yaml; compared with min_app_version from the server.
-  static const appVersion = '1.9.9';
+  static const appVersion = '2.0.0';
 }

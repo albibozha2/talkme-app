@@ -9,8 +9,17 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../i18n.dart';
 import 'profile_screen.dart';
+import '../features.dart';
 
-Future<void> showCommentsSheet(BuildContext context, Video video) =>
+Future<void> showCommentsSheet(BuildContext context, Video video) async {
+  if (!Features.on('comments')) {
+    showToast(context, tr('Comments are turned off right now.'));
+    return;
+  }
+  await _showCommentsSheet(context, video);
+}
+
+Future<void> _showCommentsSheet(BuildContext context, Video video) =>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,

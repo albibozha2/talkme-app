@@ -29,6 +29,7 @@ import 'package:flutter/foundation.dart';
 
 import '../screens/duet_screen.dart';
 import '../screens/sound_screen.dart';
+import '../features.dart';
 
 /// Shared across all videos: muting one mutes the feed.
 final mutedProvider = NotifierProvider<MutedNotifier, bool>(MutedNotifier.new);
@@ -311,7 +312,7 @@ class _VideoItemState extends ConsumerState<VideoItem>
                 onTap: () => Navigator.pop(context, 'delete'),
               ),
             ] else ...[
-              if (v.visibility == 'public')
+              if (v.visibility == 'public' && Features.on('reposts'))
                 ListTile(
                   leading: Icon(
                     Icons.repeat_rounded,
@@ -342,6 +343,7 @@ class _VideoItemState extends ConsumerState<VideoItem>
             ],
             // Duet: record yourself beside this video (phones only: browsers block the camera on http).
             if (!kIsWeb &&
+                Features.on('duets') &&
                 v.allowDuet &&
                 v.duetOf == null &&
                 v.visibility == 'public' &&
@@ -657,12 +659,15 @@ class _VideoItemState extends ConsumerState<VideoItem>
                   onTap: _toggleLike,
                   semantics: v.liked ? tr('Unlike') : tr('Like'),
                 ),
-                _Action(
-                  icon: Icons.textsms_rounded,
-                  label: v.allowComments ? compactCount(v.comments) : tr('Off'),
-                  onTap: v.allowComments ? _openComments : null,
-                  semantics: tr('Comments'),
-                ),
+                if (Features.on('comments'))
+                  _Action(
+                    icon: Icons.textsms_rounded,
+                    label: v.allowComments
+                        ? compactCount(v.comments)
+                        : tr('Off'),
+                    onTap: v.allowComments ? _openComments : null,
+                    semantics: tr('Comments'),
+                  ),
                 _Action(
                   icon: Icons.bookmark_rounded,
                   color: v.saved ? AppColors.amber : Colors.white,
@@ -677,7 +682,7 @@ class _VideoItemState extends ConsumerState<VideoItem>
                   onTap: _share,
                   semantics: tr('Share'),
                 ),
-                _GiftAction(onTap: _gift),
+                if (Features.on('gifts')) _GiftAction(onTap: _gift),
                 const SizedBox(height: 6),
                 if (c == null)
                   _SoundDisc(user: v.user, spinning: false, onTap: _more)

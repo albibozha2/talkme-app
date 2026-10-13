@@ -15,6 +15,7 @@ import 'common.dart';
 import '../i18n.dart';
 
 import 'gift_effects.dart';
+import '../features.dart';
 
 export 'gift_effects.dart';
 
@@ -36,22 +37,28 @@ Future<void> showGiftSheet(
   List<GiftRecipient> recipients = const [],
   int? to,
   required void Function(GiftEvent sent) onSent,
-}) => showModalBottomSheet<void>(
-  context: context,
-  isScrollControlled: true,
-  backgroundColor: AppColors.inkSurface,
-  barrierColor: Colors.black26,
-  builder: (_) => Theme(
-    data: buildTheme(Brightness.dark),
-    child: _GiftSheet(
-      liveId: liveId,
-      videoId: videoId,
-      recipients: recipients,
-      to: to,
-      onSent: onSent,
+}) async {
+  if (!Features.on('gifts')) {
+    showToast(context, tr('Gifts are turned off right now.'));
+    return;
+  }
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AppColors.inkSurface,
+    barrierColor: Colors.black26,
+    builder: (_) => Theme(
+      data: buildTheme(Brightness.dark),
+      child: _GiftSheet(
+        liveId: liveId,
+        videoId: videoId,
+        recipients: recipients,
+        to: to,
+        onSent: onSent,
+      ),
     ),
-  ),
-);
+  );
+}
 
 const _quantities = [1, 5, 10, 99];
 
@@ -180,10 +187,7 @@ class _GiftSheetState extends ConsumerState<_GiftSheet>
           toId: _to,
           toName: _to == null
               ? null
-              : widget.recipients
-                    .where((r) => r.id == _to)
-                    .firstOrNull
-                    ?.name,
+              : widget.recipients.where((r) => r.id == _to).firstOrNull?.name,
         ),
       );
       if (mounted) {

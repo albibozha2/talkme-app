@@ -11,6 +11,7 @@ import '../i18n.dart';
 import '../models.dart';
 import '../vip.dart';
 import 'common.dart';
+import '../features.dart';
 
 /// Gifts on screen, TikTok-style:
 /// * every gift: a banner on the left that counts up while the same person keeps sending (x2, x3 … x99);
@@ -52,7 +53,10 @@ class GiftOverlayState extends State<GiftOverlay> {
   void show(GiftEvent e) {
     // Gifts announced by others carry no animation: take it from the gift list.
     final known = knownGifts[e.gift.name];
-    if (e.gift.animUrl == null && e.gift.soundUrl == null && known != null && (known.animUrl != null || known.soundUrl != null)) {
+    if (e.gift.animUrl == null &&
+        e.gift.soundUrl == null &&
+        known != null &&
+        (known.animUrl != null || known.soundUrl != null)) {
       e = GiftEvent(
         gift: known,
         senderName: e.senderName,
@@ -61,7 +65,8 @@ class GiftOverlayState extends State<GiftOverlay> {
         senderLevel: e.senderLevel,
       );
     }
-    final premium = e.gift.coins >= 1000 ||
+    final premium =
+        e.gift.coins >= 1000 ||
         e.gift.animUrl != null ||
         (e.gift.coins >= 199 && _kindOf(e.gift) != _Kind.fireworks);
     final key = '${e.senderName}|${e.gift.name}';
@@ -96,7 +101,7 @@ class GiftOverlayState extends State<GiftOverlay> {
 
   /// VIP entrance (Gold and up) when someone joins the live; King gets a bigger one.
   void entrance(String name, String? avatar, int level) {
-    if (vipOf(level) == null) return;
+    if (vipOf(level) == null || !Features.on('vip')) return;
     final id = ++_seq;
     setState(() => _entrance = (id, name, avatar, level));
     if (level >= 45) HapticFeedback.mediumImpact();
@@ -146,7 +151,9 @@ class GiftOverlayState extends State<GiftOverlay> {
               tween: Tween(begin: 0, end: 1),
               duration: const Duration(milliseconds: 2400),
               builder: (context, t, _) {
-                final scale = t < .25 ? Curves.easeOutBack.transform(t / .25) * 1.15 : 1.15 - (t - .25) * .2;
+                final scale = t < .25
+                    ? Curves.easeOutBack.transform(t / .25) * 1.15
+                    : 1.15 - (t - .25) * .2;
                 final opacity = t < .8 ? 1.0 : (1 - t) / .2;
                 return Opacity(
                   opacity: opacity.clamp(0, 1),
@@ -161,7 +168,10 @@ class GiftOverlayState extends State<GiftOverlay> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: RadialGradient(
-                              colors: [const Color(0x88FFD45E), const Color(0x00FFD45E)],
+                              colors: [
+                                const Color(0x88FFD45E),
+                                const Color(0x00FFD45E),
+                              ],
                             ),
                           ),
                         ),
@@ -169,7 +179,12 @@ class GiftOverlayState extends State<GiftOverlay> {
                           scale: scale,
                           child: Text(
                             _burst!.$2.gift.icon,
-                            style: const TextStyle(fontSize: 130, shadows: [Shadow(blurRadius: 40, color: Colors.black54)]),
+                            style: const TextStyle(
+                              fontSize: 130,
+                              shadows: [
+                                Shadow(blurRadius: 40, color: Colors.black54),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -199,7 +214,10 @@ class _ComboBanner extends StatelessWidget {
       curve: Curves.easeOutCubic,
       builder: (context, t, child) => Opacity(
         opacity: t,
-        child: Transform.translate(offset: Offset(-70 * (1 - t), 0), child: child),
+        child: Transform.translate(
+          offset: Offset(-70 * (1 - t), 0),
+          child: child,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.only(bottom: 8),
@@ -212,7 +230,10 @@ class _ComboBanner extends StatelessWidget {
                 gradient: LinearGradient(
                   colors: vip == null
                       ? const [Color(0xCC1F2937), Color(0x661F2937)]
-                      : [vip.colors.first.withValues(alpha: .9), vip.colors.last.withValues(alpha: .35)],
+                      : [
+                          vip.colors.first.withValues(alpha: .9),
+                          vip.colors.last.withValues(alpha: .35),
+                        ],
                 ),
                 borderRadius: BorderRadius.circular(30),
               ),
@@ -228,21 +249,31 @@ class _ComboBanner extends StatelessWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (vip != null) ...[VipBadge(level: e.senderLevel, small: true), const SizedBox(width: 4)],
+                          if (vip != null) ...[
+                            VipBadge(level: e.senderLevel, small: true),
+                            const SizedBox(width: 4),
+                          ],
                           ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 110),
                             child: Text(
                               e.senderName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ],
                       ),
                       Text(
                         tr('sent {0}', [e.gift.name]),
-                        style: const TextStyle(color: Colors.white70, fontSize: 11.5),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11.5,
+                        ),
                       ),
                     ],
                   ),
@@ -257,7 +288,8 @@ class _ComboBanner extends StatelessWidget {
               tween: Tween(begin: 1.7, end: 1),
               duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutBack,
-              builder: (context, s, child) => Transform.scale(scale: s, child: child),
+              builder: (context, s, child) =>
+                  Transform.scale(scale: s, child: child),
               child: Text(
                 'x${combo.count}',
                 style: const TextStyle(
@@ -265,7 +297,10 @@ class _ComboBanner extends StatelessWidget {
                   fontSize: 30,
                   fontWeight: FontWeight.w900,
                   fontStyle: FontStyle.italic,
-                  shadows: [Shadow(blurRadius: 6, color: Color(0xFFFF5F2E)), Shadow(blurRadius: 2, color: Colors.black)],
+                  shadows: [
+                    Shadow(blurRadius: 6, color: Color(0xFFFF5F2E)),
+                    Shadow(blurRadius: 2, color: Colors.black),
+                  ],
                 ),
               ),
             ),
@@ -278,7 +313,16 @@ class _ComboBanner extends StatelessWidget {
 
 enum _Kind { rocket, diamond, castle, lion, universe, vehicle, fireworks }
 
-const _vehicles = ['car', 'motorcycle', 'train', 'jet', 'yacht', 'interstellar', 'ship', 'plane'];
+const _vehicles = [
+  'car',
+  'motorcycle',
+  'train',
+  'jet',
+  'yacht',
+  'interstellar',
+  'ship',
+  'plane',
+];
 
 _Kind _kindOf(Gift g) {
   final n = g.name.toLowerCase();
@@ -286,7 +330,9 @@ _Kind _kindOf(Gift g) {
   if (n.contains('diamond') || g.icon == '💎') return _Kind.diamond;
   if (n.contains('castle') || g.icon == '🏰') return _Kind.castle;
   if (n.contains('lion') || g.icon == '🦁') return _Kind.lion;
-  if (n.contains('universe') || n.contains('galaxy') || g.icon == '🌌') return _Kind.universe;
+  if (n.contains('universe') || n.contains('galaxy') || g.icon == '🌌') {
+    return _Kind.universe;
+  }
   if (_vehicles.any(n.contains)) return _Kind.vehicle;
   return _Kind.fireworks;
 }
@@ -301,8 +347,10 @@ class _BigGiftEffect extends StatefulWidget {
   State<_BigGiftEffect> createState() => _BigGiftEffectState();
 }
 
-class _BigGiftEffectState extends State<_BigGiftEffect> with SingleTickerProviderStateMixin {
+class _BigGiftEffectState extends State<_BigGiftEffect>
+    with SingleTickerProviderStateMixin {
   late final _Kind _kind = _kindOf(widget.event.gift);
+
   /// The uploaded animation, once downloaded (null: none, still loading, or it failed).
   Uint8List? _bytes;
   late final AnimationController _c = AnimationController(vsync: this)
@@ -317,25 +365,38 @@ class _BigGiftEffectState extends State<_BigGiftEffect> with SingleTickerProvide
     super.initState();
     final url = widget.event.gift.animUrl;
     if (url == null) {
-      _start(Duration(milliseconds: _kind == _Kind.universe || _kind == _Kind.lion ? 4800 : 4000));
+      _start(
+        Duration(
+          milliseconds: _kind == _Kind.universe || _kind == _Kind.lion
+              ? 4800
+              : 4000,
+        ),
+      );
       return;
     }
     // Wait for the file (the effect would otherwise run out before a big GIF arrives), then play all of it.
-    _loadAnim(url).timeout(const Duration(seconds: 10)).then((bytes) {
-      if (!mounted) return;
-      final file = animationLength(bytes);
-      final wanted = Duration(milliseconds: widget.event.gift.animMs ?? 0);
-      final len = file == null ? (wanted > Duration.zero ? wanted : const Duration(seconds: 5)) : (wanted > file ? wanted : file);
-      setState(() => _bytes = bytes);
-      _start(len + const Duration(milliseconds: 400));
-    }).catchError((Object _) {
-      // Couldn't download it: play the built-in effect instead.
-      if (mounted) _start(const Duration(milliseconds: 4800));
-    });
+    _loadAnim(url)
+        .timeout(const Duration(seconds: 10))
+        .then((bytes) {
+          if (!mounted) return;
+          final file = animationLength(bytes);
+          final wanted = Duration(milliseconds: widget.event.gift.animMs ?? 0);
+          final len = file == null
+              ? (wanted > Duration.zero ? wanted : const Duration(seconds: 5))
+              : (wanted > file ? wanted : file);
+          setState(() => _bytes = bytes);
+          _start(len + const Duration(milliseconds: 400));
+        })
+        .catchError((Object _) {
+          // Couldn't download it: play the built-in effect instead.
+          if (mounted) _start(const Duration(milliseconds: 4800));
+        });
   }
 
   void _start(Duration length) {
-    _c.duration = Duration(milliseconds: length.inMilliseconds.clamp(2000, 20000));
+    _c.duration = Duration(
+      milliseconds: length.inMilliseconds.clamp(2000, 20000),
+    );
     _c.forward();
     final s = widget.event.gift.soundUrl;
     if (s != null) {
@@ -366,7 +427,11 @@ class _BigGiftEffectState extends State<_BigGiftEffect> with SingleTickerProvide
           fit: StackFit.expand,
           children: [
             // Dim the stream a little so the effect stands out.
-            ColoredBox(color: Colors.black.withValues(alpha: _kind == _Kind.universe ? .55 : .3)),
+            ColoredBox(
+              color: Colors.black.withValues(
+                alpha: _kind == _Kind.universe ? .55 : .3,
+              ),
+            ),
             CustomPaint(painter: _ParticlesPainter(_kind, t, _seed)),
             if (_bytes != null)
               // The uploaded animation (e.g. a 3D lion), full width; the built-in one if it can't load.
@@ -378,7 +443,10 @@ class _BigGiftEffectState extends State<_BigGiftEffect> with SingleTickerProvide
                     height: size.height * .8,
                     child: GiftAnimation(
                       bytes: _bytes!,
-                      fallback: Stack(fit: StackFit.expand, children: [_hero(t, size)]),
+                      fallback: Stack(
+                        fit: StackFit.expand,
+                        children: [_hero(t, size)],
+                      ),
                     ),
                   ),
                 ),
@@ -397,8 +465,13 @@ class _BigGiftEffectState extends State<_BigGiftEffect> with SingleTickerProvide
     },
   );
 
-  Widget _emoji(String e, double fontSize) =>
-      Text(e, style: TextStyle(fontSize: fontSize, shadows: const [Shadow(blurRadius: 30, color: Colors.black54)]));
+  Widget _emoji(String e, double fontSize) => Text(
+    e,
+    style: TextStyle(
+      fontSize: fontSize,
+      shadows: const [Shadow(blurRadius: 30, color: Colors.black54)],
+    ),
+  );
 
   /// The gift itself, moving the way its theme does.
   Widget _hero(double t, Size size) {
@@ -406,7 +479,9 @@ class _BigGiftEffectState extends State<_BigGiftEffect> with SingleTickerProvide
     switch (_kind) {
       case _Kind.rocket:
         // Shakes on the pad, then launches to the top.
-        final launch = Curves.easeInCubic.transform(((t - .25) / .6).clamp(0.0, 1.0));
+        final launch = Curves.easeInCubic.transform(
+          ((t - .25) / .6).clamp(0.0, 1.0),
+        );
         final shake = t < .25 ? sin(t * 120) * 3 : 0.0;
         return Positioned(
           left: size.width / 2 - 60 + shake,
@@ -440,11 +515,16 @@ class _BigGiftEffectState extends State<_BigGiftEffect> with SingleTickerProvide
         return Center(
           child: Transform.translate(
             offset: Offset(roar, -size.height * .05),
-            child: Transform.scale(scale: .3 + zoom * .9, child: _emoji(icon, 170)),
+            child: Transform.scale(
+              scale: .3 + zoom * .9,
+              child: _emoji(icon, 170),
+            ),
           ),
         );
       case _Kind.universe:
-        final appear = Curves.easeOutCubic.transform(((t - .3) / .35).clamp(0.0, 1.0));
+        final appear = Curves.easeOutCubic.transform(
+          ((t - .3) / .35).clamp(0.0, 1.0),
+        );
         final orbit = t * pi * 3;
         final r = 120.0 + 30 * sin(t * pi);
         return Stack(
@@ -458,7 +538,10 @@ class _BigGiftEffectState extends State<_BigGiftEffect> with SingleTickerProvide
             Center(
               child: Transform.translate(
                 offset: Offset(0, -size.height * .08),
-                child: Transform.scale(scale: .2 + appear, child: _emoji(icon, 150)),
+                child: Transform.scale(
+                  scale: .2 + appear,
+                  child: _emoji(icon, 150),
+                ),
               ),
             ),
           ],
@@ -497,7 +580,9 @@ class _SenderBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vip = vipOf(event.senderLevel);
-    final slide = Curves.easeOutBack.transform(((t - .15) / .25).clamp(0.0, 1.0));
+    final slide = Curves.easeOutBack.transform(
+      ((t - .15) / .25).clamp(0.0, 1.0),
+    );
     return Transform.scale(
       scale: slide,
       child: Center(
@@ -515,7 +600,11 @@ class _SenderBanner extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Avatar(url: event.senderAvatar, name: event.senderName, radius: 20),
+              Avatar(
+                url: event.senderAvatar,
+                name: event.senderName,
+                radius: 20,
+              ),
               const SizedBox(width: 10),
               Flexible(
                 child: Text(
@@ -524,7 +613,11 @@ class _SenderBanner extends StatelessWidget {
                       : '${event.senderName} ${tr('sent {0}', [event.gift.name])}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
                 ),
               ),
             ],
@@ -544,7 +637,12 @@ class _ParticlesPainter extends CustomPainter {
   final int seed;
 
   static const _palette = [
-    Color(0xFFFF5F6D), Color(0xFFFFD45E), Color(0xFF22D3EE), Color(0xFFA78BFA), Color(0xFF34D399), Color(0xFFFF8A00),
+    Color(0xFFFF5F6D),
+    Color(0xFFFFD45E),
+    Color(0xFF22D3EE),
+    Color(0xFFA78BFA),
+    Color(0xFF34D399),
+    Color(0xFFFF8A00),
   ];
 
   @override
@@ -554,7 +652,16 @@ class _ParticlesPainter extends CustomPainter {
       case _Kind.rocket:
         _stars(canvas, size, rnd, 60);
         _flames(canvas, size);
-        if (t > .8) _burst(canvas, Offset(size.width / 2, size.height * .15), (t - .8) / .2, rnd, 40, 160);
+        if (t > .8) {
+          _burst(
+            canvas,
+            Offset(size.width / 2, size.height * .15),
+            (t - .8) / .2,
+            rnd,
+            40,
+            160,
+          );
+        }
       case _Kind.diamond:
         _sparkles(canvas, size, rnd, Offset(size.width / 2, size.height * .45));
       case _Kind.castle:
@@ -562,8 +669,18 @@ class _ParticlesPainter extends CustomPainter {
           final start = .25 + i * .1;
           final p = (t - start) / .35;
           if (p > 0 && p < 1) {
-            final c = Offset(size.width * (.15 + rnd.nextDouble() * .7), size.height * (.12 + rnd.nextDouble() * .3));
-            _burst(canvas, c, p, Random(seed + i), 28, 70 + rnd.nextDouble() * 60);
+            final c = Offset(
+              size.width * (.15 + rnd.nextDouble() * .7),
+              size.height * (.12 + rnd.nextDouble() * .3),
+            );
+            _burst(
+              canvas,
+              c,
+              p,
+              Random(seed + i),
+              28,
+              70 + rnd.nextDouble() * 60,
+            );
           } else {
             rnd.nextDouble();
             rnd.nextDouble();
@@ -577,12 +694,24 @@ class _ParticlesPainter extends CustomPainter {
         _warp(canvas, size, rnd);
       case _Kind.vehicle:
         _speedLines(canvas, size, rnd);
-        if (t > .35 && t < .75) _burst(canvas, Offset(size.width / 2, size.height * .3), (t - .35) / .4, rnd, 36, 150);
+        if (t > .35 && t < .75) {
+          _burst(
+            canvas,
+            Offset(size.width / 2, size.height * .3),
+            (t - .35) / .4,
+            rnd,
+            36,
+            150,
+          );
+        }
       case _Kind.fireworks:
         for (var i = 0; i < 4; i++) {
           final p = (t - i * .15) / .45;
           if (p > 0 && p < 1) {
-            final c = Offset(size.width * (.2 + .6 * Random(seed + i).nextDouble()), size.height * (.2 + .25 * Random(seed + 7 * i).nextDouble()));
+            final c = Offset(
+              size.width * (.2 + .6 * Random(seed + i).nextDouble()),
+              size.height * (.2 + .25 * Random(seed + 7 * i).nextDouble()),
+            );
             _burst(canvas, c, p, Random(seed + i), 30, 110);
           }
         }
@@ -594,7 +723,10 @@ class _ParticlesPainter extends CustomPainter {
     for (var i = 0; i < 40; i++) {
       final y = size.height * (.3 + .3 * rnd.nextDouble());
       final len = 60 + rnd.nextDouble() * 140;
-      final x = (size.width + len) * (1 - ((t * (1.5 + rnd.nextDouble()) + rnd.nextDouble()) % 1.0)) - len;
+      final x =
+          (size.width + len) *
+              (1 - ((t * (1.5 + rnd.nextDouble()) + rnd.nextDouble()) % 1.0)) -
+          len;
       paint
         ..color = Colors.white.withValues(alpha: .15 + .35 * rnd.nextDouble())
         ..strokeWidth = 1 + 2 * rnd.nextDouble();
@@ -602,13 +734,25 @@ class _ParticlesPainter extends CustomPainter {
     }
   }
 
-  void _burst(Canvas canvas, Offset c, double p, Random rnd, int n, double radius) {
+  void _burst(
+    Canvas canvas,
+    Offset c,
+    double p,
+    Random rnd,
+    int n,
+    double radius,
+  ) {
     final paint = Paint();
     for (var i = 0; i < n; i++) {
       final a = i / n * 2 * pi + rnd.nextDouble() * .2;
-      final d = radius * Curves.easeOutCubic.transform(p) * (.7 + rnd.nextDouble() * .3);
+      final d =
+          radius *
+          Curves.easeOutCubic.transform(p) *
+          (.7 + rnd.nextDouble() * .3);
       final pos = c + Offset(cos(a) * d, sin(a) * d + 40 * p * p);
-      paint.color = _palette[i % _palette.length].withValues(alpha: (1 - p).clamp(0.0, 1.0));
+      paint.color = _palette[i % _palette.length].withValues(
+        alpha: (1 - p).clamp(0.0, 1.0),
+      );
       canvas.drawCircle(pos, 3.2 * (1 - p * .6), paint);
     }
   }
@@ -617,21 +761,44 @@ class _ParticlesPainter extends CustomPainter {
     final paint = Paint()..color = Colors.white;
     for (var i = 0; i < n; i++) {
       final x = rnd.nextDouble() * size.width;
-      final y = (rnd.nextDouble() * size.height + t * size.height * (1 + rnd.nextDouble())) % size.height;
+      final y =
+          (rnd.nextDouble() * size.height +
+              t * size.height * (1 + rnd.nextDouble())) %
+          size.height;
       paint.color = Colors.white.withValues(alpha: .3 + .5 * rnd.nextDouble());
       canvas.drawCircle(Offset(x, y), 1 + rnd.nextDouble() * 1.5, paint);
     }
   }
 
   void _flames(Canvas canvas, Size size) {
-    final launch = Curves.easeInCubic.transform(((t - .25) / .6).clamp(0.0, 1.0));
-    final base = Offset(size.width / 2 - 20, size.height * .62 - launch * size.height * .95 + 120);
+    final launch = Curves.easeInCubic.transform(
+      ((t - .25) / .6).clamp(0.0, 1.0),
+    );
+    final base = Offset(
+      size.width / 2 - 20,
+      size.height * .62 - launch * size.height * .95 + 120,
+    );
     for (var i = 0; i < 18; i++) {
       final k = i / 18;
       final paint = Paint()
-        ..shader = RadialGradient(colors: [const Color(0xFFFFF3B0), const Color(0xFFFF8A00).withValues(alpha: .7), const Color(0x00FF2E63)])
-            .createShader(Rect.fromCircle(center: base + Offset(-k * 30, k * 140), radius: 26 - k * 10));
-      canvas.drawCircle(base + Offset(-k * 30 + sin(t * 60 + i) * 4, k * 140), 26 - k * 10, paint);
+        ..shader =
+            RadialGradient(
+              colors: [
+                const Color(0xFFFFF3B0),
+                const Color(0xFFFF8A00).withValues(alpha: .7),
+                const Color(0x00FF2E63),
+              ],
+            ).createShader(
+              Rect.fromCircle(
+                center: base + Offset(-k * 30, k * 140),
+                radius: 26 - k * 10,
+              ),
+            );
+      canvas.drawCircle(
+        base + Offset(-k * 30 + sin(t * 60 + i) * 4, k * 140),
+        26 - k * 10,
+        paint,
+      );
     }
   }
 
@@ -644,7 +811,12 @@ class _ParticlesPainter extends CustomPainter {
       if (p <= 0) continue;
       final d = p * size.width * .55;
       final pos = c + Offset(cos(a) * d, sin(a) * d);
-      paint.color = HSVColor.fromAHSV((1 - p).clamp(0.0, 1.0), (i * 37) % 360.0, .5, 1).toColor();
+      paint.color = HSVColor.fromAHSV(
+        (1 - p).clamp(0.0, 1.0),
+        (i * 37) % 360.0,
+        .5,
+        1,
+      ).toColor();
       final s = 2.5 + 3 * (1 - p);
       final path = Path()
         ..moveTo(pos.dx, pos.dy - s * 2)
@@ -663,13 +835,25 @@ class _ParticlesPainter extends CustomPainter {
       final a = spin + i * pi / 8;
       final path = Path()
         ..moveTo(c.dx, c.dy)
-        ..lineTo(c.dx + cos(a - .08) * size.height, c.dy + sin(a - .08) * size.height)
-        ..lineTo(c.dx + cos(a + .08) * size.height, c.dy + sin(a + .08) * size.height)
+        ..lineTo(
+          c.dx + cos(a - .08) * size.height,
+          c.dy + sin(a - .08) * size.height,
+        )
+        ..lineTo(
+          c.dx + cos(a + .08) * size.height,
+          c.dy + sin(a + .08) * size.height,
+        )
         ..close();
       canvas.drawPath(path, paint);
     }
-    canvas.drawCircle(c, size.width * .35, Paint()..shader = RadialGradient(colors: const [Color(0x99FFD45E), Color(0x00FFD45E)])
-        .createShader(Rect.fromCircle(center: c, radius: size.width * .35)));
+    canvas.drawCircle(
+      c,
+      size.width * .35,
+      Paint()
+        ..shader = RadialGradient(
+          colors: const [Color(0x99FFD45E), Color(0x00FFD45E)],
+        ).createShader(Rect.fromCircle(center: c, radius: size.width * .35)),
+    );
   }
 
   void _coinRain(Canvas canvas, Size size, Random rnd) {
@@ -681,9 +865,16 @@ class _ParticlesPainter extends CustomPainter {
       final y = -20 + p * (size.height + 40);
       final r = 7 + rnd.nextDouble() * 5;
       final squash = cos(t * 20 + i).abs();
-      final rect = Rect.fromCenter(center: Offset(x, y), width: r * 2 * (.3 + .7 * squash), height: r * 2);
+      final rect = Rect.fromCenter(
+        center: Offset(x, y),
+        width: r * 2 * (.3 + .7 * squash),
+        height: r * 2,
+      );
       canvas.drawOval(rect, Paint()..color = const Color(0xFFF59E0B));
-      canvas.drawOval(rect.deflate(2), Paint()..color = const Color(0xFFFDE68A));
+      canvas.drawOval(
+        rect.deflate(2),
+        Paint()..color = const Color(0xFFFDE68A),
+      );
     }
   }
 
@@ -697,9 +888,18 @@ class _ParticlesPainter extends CustomPainter {
       final d1 = p * p * size.height;
       final d2 = d1 * .82;
       paint
-        ..color = HSVColor.fromAHSV((.3 + p * .7).clamp(0.0, 1.0), 200 + 80 * rnd.nextDouble(), .4, 1).toColor()
+        ..color = HSVColor.fromAHSV(
+          (.3 + p * .7).clamp(0.0, 1.0),
+          200 + 80 * rnd.nextDouble(),
+          .4,
+          1,
+        ).toColor()
         ..strokeWidth = .8 + p * 2.2;
-      canvas.drawLine(c + Offset(cos(a) * d2, sin(a) * d2), c + Offset(cos(a) * d1, sin(a) * d1), paint);
+      canvas.drawLine(
+        c + Offset(cos(a) * d2, sin(a) * d2),
+        c + Offset(cos(a) * d1, sin(a) * d1),
+        paint,
+      );
     }
   }
 
@@ -710,7 +910,12 @@ class _ParticlesPainter extends CustomPainter {
 /// A VIP walking in: a shining banner sweeps across the screen in the tier's colours.
 /// King (level 45+) adds golden rays behind it.
 class _VipEntrance extends StatelessWidget {
-  const _VipEntrance({super.key, required this.name, required this.avatar, required this.level});
+  const _VipEntrance({
+    super.key,
+    required this.name,
+    required this.avatar,
+    required this.level,
+  });
   final String name;
   final String? avatar;
   final int level;
@@ -736,8 +941,17 @@ class _VipEntrance extends StatelessWidget {
           children: [
             if (king)
               Opacity(
-                opacity: (t < .1 ? t / .1 : t > .85 ? (1 - t) / .15 : 1.0).clamp(0.0, 1.0) * .8,
-                child: CustomPaint(painter: _ParticlesPainter(_Kind.lion, t, name.hashCode)),
+                opacity:
+                    (t < .1
+                            ? t / .1
+                            : t > .85
+                            ? (1 - t) / .15
+                            : 1.0)
+                        .clamp(0.0, 1.0) *
+                    .8,
+                child: CustomPaint(
+                  painter: _ParticlesPainter(_Kind.lion, t, name.hashCode),
+                ),
               ),
             Positioned(
               left: 0,
@@ -752,17 +966,29 @@ class _VipEntrance extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(40),
                       gradient: LinearGradient(
-                        colors: [vip.colors.first, vip.colors.last, vip.colors.first],
+                        colors: [
+                          vip.colors.first,
+                          vip.colors.last,
+                          vip.colors.first,
+                        ],
                         stops: [0, shine.clamp(0.0, 1.0), 1],
                       ),
-                      boxShadow: [BoxShadow(color: vip.color.withValues(alpha: .6), blurRadius: king ? 30 : 16)],
+                      boxShadow: [
+                        BoxShadow(
+                          color: vip.color.withValues(alpha: .6),
+                          blurRadius: king ? 30 : 16,
+                        ),
+                      ],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Avatar(url: avatar, name: name, radius: king ? 24 : 18),
                         const SizedBox(width: 10),
-                        Text(vip.icon, style: TextStyle(fontSize: king ? 26 : 20)),
+                        Text(
+                          vip.icon,
+                          style: TextStyle(fontSize: king ? 26 : 20),
+                        ),
                         const SizedBox(width: 6),
                         Flexible(
                           child: Column(
@@ -777,7 +1003,12 @@ class _VipEntrance extends StatelessWidget {
                                   color: Colors.white,
                                   fontWeight: FontWeight.w900,
                                   fontSize: king ? 17 : 14.5,
-                                  shadows: const [Shadow(blurRadius: 4, color: Colors.black45)],
+                                  shadows: const [
+                                    Shadow(
+                                      blurRadius: 4,
+                                      color: Colors.black45,
+                                    ),
+                                  ],
                                 ),
                               ),
                               Text(
@@ -786,7 +1017,12 @@ class _VipEntrance extends StatelessWidget {
                                   color: Colors.white,
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w600,
-                                  shadows: [Shadow(blurRadius: 3, color: Colors.black45)],
+                                  shadows: [
+                                    Shadow(
+                                      blurRadius: 3,
+                                      color: Colors.black45,
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -879,12 +1115,17 @@ class _GiftAnimationState extends State<GiftAnimation> {
     if (_failed) return widget.fallback;
     final f = _frame;
     if (f == null) return const SizedBox.shrink();
-    return RawImage(image: f, fit: BoxFit.contain, filterQuality: FilterQuality.medium);
+    return RawImage(
+      image: f,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
+    );
   }
 }
 
 /// Browsers and Android show frames marked 0–10 ms for 100 ms.
-Duration _frameTime(Duration d) => d.inMilliseconds <= 10 ? const Duration(milliseconds: 100) : d;
+Duration _frameTime(Duration d) =>
+    d.inMilliseconds <= 10 ? const Duration(milliseconds: 100) : d;
 
 /// How long one pass of an animated GIF / WebP lasts, read from the file (null if it can't tell).
 Duration? animationLength(Uint8List b) {
@@ -920,7 +1161,9 @@ Duration? animationLength(Uint8List b) {
           break; // 0x3B: end
         }
       }
-    } else if (b.length > 16 && String.fromCharCodes(b.sublist(0, 4)) == 'RIFF' && String.fromCharCodes(b.sublist(8, 12)) == 'WEBP') {
+    } else if (b.length > 16 &&
+        String.fromCharCodes(b.sublist(0, 4)) == 'RIFF' &&
+        String.fromCharCodes(b.sublist(8, 12)) == 'WEBP') {
       // Animated WebP: every ANMF chunk has a 24-bit duration in ms.
       var i = 12;
       while (i + 8 <= b.length) {

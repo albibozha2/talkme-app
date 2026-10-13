@@ -13,6 +13,7 @@ import '../pok_pay.dart';
 import '../screens/agents_sheet.dart';
 import '../theme.dart';
 import 'common.dart';
+import '../features.dart';
 
 /// TikTok-style "Recharge" sheet: pick a coin package, pick Card / POK or PayPal, tap Recharge.
 /// The payment page opens inside the app and the sheet closes by itself once the coins are in.
@@ -21,7 +22,15 @@ Future<bool> showRechargeSheet(
   BuildContext context,
   WidgetRef ref, {
   int? packageId,
-}) async =>
+}) async {
+  if (!Features.on('buy_coins')) {
+    showToast(context, tr('Buying coins is paused right now.'));
+    return false;
+  }
+  return await _showRechargeSheet(context, packageId);
+}
+
+Future<bool> _showRechargeSheet(BuildContext context, int? packageId) async =>
     await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,

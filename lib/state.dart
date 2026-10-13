@@ -1,14 +1,39 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'features.dart';
+
 import 'api.dart';
 import 'models.dart';
 import 'push.dart';
 import 'google_auth.dart';
 
 /// Server-side app settings (maintenance mode, minimum version, limits).
-final remoteConfigProvider = FutureProvider<RemoteConfig>(
-  (ref) => ref.watch(apiProvider).config(),
+final remoteConfigProvider = FutureProvider<RemoteConfig>((ref) async {
+  final cfg = await ref.watch(apiProvider).config();
+  Features.update(cfg.features);
+  return cfg;
+});
+
+/// Bumped when the feature switches were re-read (rebuilds what depends on them).
+class FeaturesVersion extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void bump() => state++;
+}
+
+final featuresVersionProvider = NotifierProvider<FeaturesVersion, int>(
+  FeaturesVersion.new,
 );
+
+/// Re-reads Admin → Features (when the app comes back to the front).
+Future<void> refreshFeatures(WidgetRef ref) async {
+  try {
+    final cfg = await ref.read(apiProvider).config();
+    Features.update(cfg.features);
+    ref.read(featuresVersionProvider.notifier).bump();
+  } catch (_) {}
+}
 
 /// The signed-in user, or null when signed out.
 final sessionProvider = AsyncNotifierProvider<SessionNotifier, AppUser?>(

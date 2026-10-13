@@ -12,6 +12,7 @@ import '../screens/profile_screen.dart';
 import '../theme.dart';
 import '../vip.dart';
 import 'common.dart';
+import '../features.dart';
 
 /// TikTok-style LIVE rankings: streamers this hour / this week, top gifters this week.
 /// [tab]: 0 hourly, 1 weekly, 2 gifters. [highlight]: someone to mark in the list (the host of the open live).
@@ -19,17 +20,27 @@ Future<void> showLiveRankings(
   BuildContext context, {
   int tab = 0,
   int? highlight,
-}) => showModalBottomSheet<void>(
-  context: context,
-  isScrollControlled: true,
-  backgroundColor: AppColors.inkSurface,
-  builder: (_) => Theme(
-    data: buildTheme(Brightness.dark),
-    child: _RankingsSheet(tab: tab, highlight: highlight),
-  ),
-);
+}) async {
+  if (!Features.on('live_rankings')) {
+    showToast(context, tr('LIVE rankings are turned off right now.'));
+    return;
+  }
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AppColors.inkSurface,
+    builder: (_) => Theme(
+      data: buildTheme(Brightness.dark),
+      child: _RankingsSheet(tab: tab, highlight: highlight),
+    ),
+  );
+}
 
-const _tabs = [('streamers', 'hour'), ('streamers', 'week'), ('gifters', 'week')];
+const _tabs = [
+  ('streamers', 'hour'),
+  ('streamers', 'week'),
+  ('gifters', 'week'),
+];
 
 class _RankingsSheet extends StatefulWidget {
   const _RankingsSheet({required this.tab, this.highlight});
@@ -160,7 +171,9 @@ class _RankingListState extends ConsumerState<_RankingList> {
     final d = s ~/ 86400, h = s % 86400 ~/ 3600, m = s % 3600 ~/ 60;
     final sec = s % 60;
     String two(int n) => n.toString().padLeft(2, '0');
-    return d > 0 ? '${d}d ${two(h)}:${two(m)}:${two(sec)}' : '${two(h)}:${two(m)}:${two(sec)}';
+    return d > 0
+        ? '${d}d ${two(h)}:${two(m)}:${two(sec)}'
+        : '${two(h)}:${two(m)}:${two(sec)}';
   }
 
   @override
@@ -184,7 +197,11 @@ class _RankingListState extends ConsumerState<_RankingList> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Row(
               children: [
-                const Icon(Icons.timer_outlined, size: 16, color: Colors.white60),
+                const Icon(
+                  Icons.timer_outlined,
+                  size: 16,
+                  color: Colors.white60,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   tr('Ends in {0}', [_left(d.endsAt)]),
@@ -239,7 +256,9 @@ class _RankingListState extends ConsumerState<_RankingList> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Text(
                 d.me!.rank == 1
-                    ? tr('You are #1 with {0} coins 👑', [compactCount(d.me!.coins)])
+                    ? tr('You are #1 with {0} coins 👑', [
+                        compactCount(d.me!.coins),
+                      ])
                     : tr('You are #{0} · {1} coins to pass #{2}', [
                         d.me!.rank,
                         compactCount(d.me!.gap),
@@ -334,7 +353,9 @@ class _LiveRankTile extends StatelessWidget {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: live != null ? AppColors.live : Colors.transparent,
+                        color: live != null
+                            ? AppColors.live
+                            : Colors.transparent,
                         width: 2,
                       ),
                     ),

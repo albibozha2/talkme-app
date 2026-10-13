@@ -51,7 +51,8 @@ class Api {
     // Quick-tunnel addresses are temporary, and the Cloudflare Worker alias is no longer needed
     // now that talkme.space has its own https: go back to the real server.
     if (saved != null &&
-        (saved.contains('.trycloudflare.com') || saved.contains('.workers.dev'))) {
+        (saved.contains('.trycloudflare.com') ||
+            saved.contains('.workers.dev'))) {
       await Kv.write(_serverKey, null);
       saved = null;
     }
@@ -527,15 +528,17 @@ class Api {
       RewardState(await post('/rewards/checkin') as Map<String, dynamic>);
 
   /// LIVE ranking: [type] streamers or gifters; [period] hour, day or week. [focus]: also the place of this user.
-  Future<LiveRanking> liveRanking(String type, String period, {int? focus}) async =>
-      LiveRanking(
-        await get('/rankings/live', {
-              'type': type,
-              'period': period,
-              if (focus != null) 'user': '$focus',
-            })
-            as Map<String, dynamic>,
-      );
+  Future<LiveRanking> liveRanking(
+    String type,
+    String period, {
+    int? focus,
+  }) async => LiveRanking(
+    await get('/rankings/live', {
+      'type': type,
+      'period': period,
+      if (focus != null) 'user': '$focus',
+    }) as Map<String, dynamic>,
+  );
 
   /// [type] gifters or creators; [period] day, week, month or all.
   Future<(List<RankEntry>, RankEntry?)> leaderboard(
@@ -1228,11 +1231,10 @@ class Api {
     bool? autoAccept,
   }) async => GuestBoard(
     await post('/live/$liveId/guests/settings', {
-          'seats': ?seats,
-          'policy': ?policy,
-          'auto_accept': ?autoAccept,
-        })
-        as Map<String, dynamic>,
+      'seats': ?seats,
+      'policy': ?policy,
+      'auto_accept': ?autoAccept,
+    }) as Map<String, dynamic>,
   );
 
   /// Everyone: guests on camera with their coins, and the layout.

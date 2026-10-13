@@ -19,6 +19,7 @@ import '../widgets/voice.dart';
 import 'group_screens.dart';
 import 'profile_screen.dart';
 import '../i18n.dart';
+import '../features.dart';
 
 const chatReactions = ['❤️', '😂', '😮', '😢', '😡', '👍', '🔥', '👏'];
 
@@ -826,13 +827,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                     else
                       Row(
                         children: [
-                          IconButton(
-                            tooltip: tr('Photo or video'),
-                            icon: const Icon(
-                              Icons.add_photo_alternate_outlined,
+                          if (Features.on('chat_media'))
+                            IconButton(
+                              tooltip: tr('Photo or video'),
+                              icon: const Icon(
+                                Icons.add_photo_alternate_outlined,
+                              ),
+                              onPressed: _sending ? null : _sendPhoto,
                             ),
-                            onPressed: _sending ? null : _sendPhoto,
-                          ),
                           Expanded(
                             child: TextField(
                               controller: _input,
@@ -874,8 +876,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                               onPressed: _sending
                                   ? null
                                   : (_input.text.trim().isEmpty
-                                        ? () =>
-                                              setState(() => _recording = true)
+                                        ? (Features.on('chat_media')
+                                              ? () => setState(
+                                                  () => _recording = true,
+                                                )
+                                              : null)
                                         : _send),
                               icon: _sending
                                   ? const SizedBox(

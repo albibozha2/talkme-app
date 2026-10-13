@@ -187,7 +187,9 @@ class _UpdateSheetState extends State<_UpdateSheet>
         setState(() {
           _file = null;
           _progress = null;
-          _status = e.message ?? tr('Download failed. Check your connection and try again.');
+          _status =
+              e.message ??
+              tr('Download failed. Check your connection and try again.');
         });
       }
       return;

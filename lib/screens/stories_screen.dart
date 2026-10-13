@@ -20,6 +20,7 @@ import 'package:flutter/foundation.dart';
 
 import '../sound_sync.dart';
 import '../widgets/sound_picker.dart';
+import '../features.dart';
 
 /// Bumped after posting or deleting a story, so story bars reload.
 final storiesVersionProvider = NotifierProvider<StoriesVersion, int>(
@@ -220,6 +221,10 @@ class _StoryBarState extends ConsumerState<StoryBar> {
 // ---------- posting ----------
 
 Future<void> createStory(BuildContext context, WidgetRef ref) async {
+  if (!Features.on('stories')) {
+    showToast(context, tr('Stories are turned off right now.'));
+    return;
+  }
   final source = await showModalBottomSheet<String>(
     context: context,
     showDragHandle: true,

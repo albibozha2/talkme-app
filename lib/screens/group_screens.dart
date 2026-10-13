@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'chat_screen.dart';
 import 'profile_screen.dart';
+import '../features.dart';
 
 /// Pick people (from those you follow and who follow you). Returns usernames.
 class PeoplePicker extends ConsumerStatefulWidget {
@@ -203,6 +204,10 @@ class _PeoplePickerState extends ConsumerState<PeoplePicker> {
 
 /// Start a group chat: pick at least two people, then the chat opens.
 Future<void> startGroupChat(BuildContext context, WidgetRef ref) async {
+  if (!Features.on('groups')) {
+    showToast(context, tr('Group chats are turned off right now.'));
+    return;
+  }
   final r = await Navigator.of(context)
       .push<({String title, List<String> usernames})>(
         MaterialPageRoute(

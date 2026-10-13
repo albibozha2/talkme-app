@@ -569,6 +569,12 @@ class RemoteConfig {
   String get termsText => raw['terms_text'] as String? ?? '';
   String get privacyText => raw['privacy_text'] as String? ?? '';
   String get googleClientId => raw['google_client_id'] as String? ?? '';
+
+  /// Modules on / off (Admin → Features).
+  Map<String, bool> get features => {
+    for (final e in ((raw['features'] as Map?) ?? const {}).entries)
+      '${e.key}': e.value == true,
+  };
 }
 
 class Gift {

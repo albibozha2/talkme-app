@@ -15,6 +15,7 @@ import 'live_room_screen.dart';
 import '../i18n.dart';
 import '../widgets/live_rankings.dart';
 import 'live_extras.dart';
+import '../features.dart';
 
 /// "Live" tab: who's streaming now, plus a Go Live call to action.
 class LiveScreen extends ConsumerStatefulWidget {
@@ -87,14 +88,15 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
           children: [LiveBadge(), SizedBox(width: 8), Text(tr('Live now'))],
         ),
         actions: [
-          IconButton(
-            tooltip: tr('LIVE rankings'),
-            icon: const Icon(
-              Icons.emoji_events_rounded,
-              color: AppColors.amber,
+          if (Features.on('live_rankings'))
+            IconButton(
+              tooltip: tr('LIVE rankings'),
+              icon: const Icon(
+                Icons.emoji_events_rounded,
+                color: AppColors.amber,
+              ),
+              onPressed: () => showLiveRankings(context),
             ),
-            onPressed: () => showLiveRankings(context),
-          ),
           IconButton(
             tooltip: tr('Schedule a live'),
             icon: const Icon(Icons.event_rounded),

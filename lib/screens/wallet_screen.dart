@@ -13,6 +13,7 @@ import '../widgets/recharge_sheet.dart';
 import '../i18n.dart';
 import '../vip.dart';
 import 'rewards_screen.dart';
+import '../features.dart';
 
 class WalletScreen extends ConsumerStatefulWidget {
   const WalletScreen({super.key});
@@ -193,34 +194,36 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                         ),
                       ),
                     ),
-                  const SizedBox(height: 12),
-                  Material(
-                    color: AppColors.amber.withValues(alpha: .14),
-                    borderRadius: BorderRadius.circular(20),
-                    child: ListTile(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+                  if (Features.on('rewards')) ...[
+                    const SizedBox(height: 12),
+                    Material(
+                      color: AppColors.amber.withValues(alpha: .14),
+                      borderRadius: BorderRadius.circular(20),
+                      child: ListTile(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        leading: const Icon(
+                          Icons.card_giftcard_rounded,
+                          color: AppColors.amber,
+                        ),
+                        title: Text(
+                          tr('Daily rewards'),
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: Text(tr('Free bonus coins every day')),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const RewardsScreen(),
+                            ),
+                          );
+                          if (mounted) _load();
+                        },
                       ),
-                      leading: const Icon(
-                        Icons.card_giftcard_rounded,
-                        color: AppColors.amber,
-                      ),
-                      title: Text(
-                        tr('Daily rewards'),
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      subtitle: Text(tr('Free bonus coins every day')),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const RewardsScreen(),
-                          ),
-                        );
-                        if (mounted) _load();
-                      },
                     ),
-                  ),
+                  ],
                   if (w.testMode)
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
@@ -235,7 +238,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                         ),
                       ),
                     ),
-                  if (_me?.giftsSent != null) ...[
+                  if (_me?.giftsSent != null && Features.on('vip')) ...[
                     const SizedBox(height: 14),
                     GestureDetector(
                       onTap: () => showVipTiers(
@@ -249,199 +252,202 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 22),
-                  Text(
-                    tr('Get coins'),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  if ((_pay?.firstPurchaseBonus ?? 0) > 0 && !w.testMode) ...[
-                    // First purchase: extra coins (set in admin).
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.goldGradient,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        children: [
-                          const Text('🎁', style: TextStyle(fontSize: 22)),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              tr(
-                                'First purchase: +{0}% extra coins on any package',
-                                [_pay!.firstPurchaseBonus],
-                              ),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  Material(
-                    color: AppColors.emerald.withValues(alpha: .12),
-                    borderRadius: BorderRadius.circular(20),
-                    child: ListTile(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      leading: const Icon(
-                        Icons.storefront_rounded,
-                        color: AppColors.emerald,
-                      ),
-                      title: Text(
-                        tr('Buy from an official agent'),
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      subtitle: Text(
-                        tr('Pay cash, bank transfer or mobile payment'),
-                      ),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () async {
-                        await showAgentsSheet(context);
-                        if (mounted) _load();
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 1.35,
-                    children: [
-                      for (final p in w.packages)
-                        Material(
-                          color: scheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(20),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(20),
-                            onTap: () => _buy(p),
-                            child: Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const CoinIcon(size: 22),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        '${p.coins}',
-                                        style: const TextStyle(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (p.bonus > 0)
-                                    Text(
-                                      tr('+{0} bonus', [p.bonus]),
-                                      style: const TextStyle(
-                                        color: AppColors.emerald,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  const Spacer(),
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 7,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      gradient: AppColors.brandGradient,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        !w.testMode && _lekPackage(p) != null
-                                            ? formatLek(
-                                                _lekPackage(p)!.priceAll,
-                                              )
-                                            : p.price,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  if ((_pay?.payments ?? const []).isNotEmpty) ...[
-                    const SizedBox(height: 26),
+                  if (Features.on('buy_coins')) ...[
+                    const SizedBox(height: 22),
                     Text(
-                      tr('Your payments'),
+                      tr('Get coins'),
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    const SizedBox(height: 6),
-                    // Card / POK app payments.
-                    for (final p in _pay!.payments)
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        onTap: p.status == 'pending'
-                            ? () async {
-                                await resumePokPayment(context, ref, p);
-                                if (mounted) _load();
-                              }
-                            : null,
-                        leading: CircleAvatar(
-                          backgroundColor:
-                              (p.status == 'paid'
-                                      ? AppColors.emerald
-                                      : p.status == 'pending'
-                                      ? AppColors.amber
-                                      : scheme.surfaceContainerHigh)
-                                  .withValues(alpha: .18),
-                          child: Icon(
-                            p.status == 'paid'
-                                ? Icons.check_rounded
-                                : p.status == 'pending'
-                                ? Icons.credit_card
-                                : Icons.close_rounded,
-                            size: 20,
-                          ),
+                    const SizedBox(height: 12),
+                    if ((_pay?.firstPurchaseBonus ?? 0) > 0 && !w.testMode) ...[
+                      // First purchase: extra coins (set in admin).
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
                         ),
-                        title: Text(
-                          tr('{0} coins · {1}', [p.coins, p.price]),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
+                        decoration: BoxDecoration(
+                          gradient: AppColors.goldGradient,
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        subtitle: Text(
-                          '${p.via} · ${switch (p.status) {
-                            'paid' => tr('Paid'),
-                            'pending' => tr('Not paid yet · tap to continue'),
-                            'refunded' => tr('Refunded'),
-                            _ => tr('Not completed'),
-                          }}',
-                          style: const TextStyle(fontSize: 12),
+                        child: Row(
+                          children: [
+                            const Text('🎁', style: TextStyle(fontSize: 22)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                tr(
+                                  'First purchase: +{0}% extra coins on any package',
+                                  [_pay!.firstPurchaseBonus],
+                                ),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        trailing: p.status == 'pending'
-                            ? const Icon(Icons.chevron_right_rounded)
-                            : null,
                       ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (Features.on('agents'))
+                      Material(
+                        color: AppColors.emerald.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(20),
+                        child: ListTile(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          leading: const Icon(
+                            Icons.storefront_rounded,
+                            color: AppColors.emerald,
+                          ),
+                          title: Text(
+                            tr('Buy from an official agent'),
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: Text(
+                            tr('Pay cash, bank transfer or mobile payment'),
+                          ),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                          onTap: () async {
+                            await showAgentsSheet(context);
+                            if (mounted) _load();
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    GridView.count(
+                      crossAxisCount: 2,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1.35,
+                      children: [
+                        for (final p in w.packages)
+                          Material(
+                            color: scheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(20),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: () => _buy(p),
+                              child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const CoinIcon(size: 22),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '${p.coins}',
+                                          style: const TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (p.bonus > 0)
+                                      Text(
+                                        tr('+{0} bonus', [p.bonus]),
+                                        style: const TextStyle(
+                                          color: AppColors.emerald,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    const Spacer(),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 7,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        gradient: AppColors.brandGradient,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          !w.testMode && _lekPackage(p) != null
+                                              ? formatLek(
+                                                  _lekPackage(p)!.priceAll,
+                                                )
+                                              : p.price,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    if ((_pay?.payments ?? const []).isNotEmpty) ...[
+                      const SizedBox(height: 26),
+                      Text(
+                        tr('Your payments'),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 6),
+                      // Card / POK app payments.
+                      for (final p in _pay!.payments)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          onTap: p.status == 'pending'
+                              ? () async {
+                                  await resumePokPayment(context, ref, p);
+                                  if (mounted) _load();
+                                }
+                              : null,
+                          leading: CircleAvatar(
+                            backgroundColor:
+                                (p.status == 'paid'
+                                        ? AppColors.emerald
+                                        : p.status == 'pending'
+                                        ? AppColors.amber
+                                        : scheme.surfaceContainerHigh)
+                                    .withValues(alpha: .18),
+                            child: Icon(
+                              p.status == 'paid'
+                                  ? Icons.check_rounded
+                                  : p.status == 'pending'
+                                  ? Icons.credit_card
+                                  : Icons.close_rounded,
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            tr('{0} coins · {1}', [p.coins, p.price]),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '${p.via} · ${switch (p.status) {
+                              'paid' => tr('Paid'),
+                              'pending' => tr('Not paid yet · tap to continue'),
+                              'refunded' => tr('Refunded'),
+                              _ => tr('Not completed'),
+                            }}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          trailing: p.status == 'pending'
+                              ? const Icon(Icons.chevron_right_rounded)
+                              : null,
+                        ),
+                    ],
                   ],
-                  if (_payouts != null) ...[
+                  if (_payouts != null && Features.on('payouts')) ...[
                     const SizedBox(height: 26),
                     _WithdrawCard(info: _payouts!, onChanged: _load),
                   ],

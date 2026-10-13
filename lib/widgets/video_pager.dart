@@ -71,7 +71,10 @@ class VideoPagerState extends ConsumerState<VideoPager>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _watchTick = Timer.periodic(const Duration(milliseconds: 250), (_) => _tickWatch());
+    _watchTick = Timer.periodic(
+      const Duration(milliseconds: 250),
+      (_) => _tickWatch(),
+    );
     if (_items.isEmpty) {
       _loadMore();
     } else {

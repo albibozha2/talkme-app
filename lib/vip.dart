@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'i18n.dart';
+import 'features.dart';
 
 /// VIP tiers for gifters, from the gifter level (which grows with the coins someone has gifted).
 /// Level n needs 100·n² coins in total (same formula as the server).
@@ -77,6 +78,7 @@ class VipBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!Features.on('vip')) return const SizedBox.shrink();
     final t = vipOf(level);
     if (t == null) {
       return Container(
@@ -346,6 +348,7 @@ class ChampionBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!Features.on('live_rankings')) return const SizedBox.shrink();
     final colors = switch (rank) {
       1 => const [Color(0xFFF59E0B), Color(0xFFFDE68A)],
       2 => const [Color(0xFF94A3B8), Color(0xFFE2E8F0)],

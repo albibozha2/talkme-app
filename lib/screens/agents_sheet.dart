@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'chat_screen.dart';
 import '../i18n.dart';
+import '../features.dart';
 
 /// An official coin seller (Admin → Coin agents).
 class CoinAgent {
@@ -32,7 +33,15 @@ class CoinAgent {
   }
 }
 
-Future<void> showAgentsSheet(BuildContext context) =>
+Future<void> showAgentsSheet(BuildContext context) async {
+  if (!Features.on('agents')) {
+    showToast(context, tr('Coin agents are turned off right now.'));
+    return;
+  }
+  await _showAgentsSheet(context);
+}
+
+Future<void> _showAgentsSheet(BuildContext context) =>
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,

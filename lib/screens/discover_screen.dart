@@ -14,6 +14,7 @@ import 'profile_screen.dart';
 import '../i18n.dart';
 import 'stories_screen.dart';
 import '../playback.dart';
+import '../features.dart';
 
 class DiscoverScreen extends ConsumerStatefulWidget {
   const DiscoverScreen({super.key, this.autofocus = false});
@@ -243,7 +244,8 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                     ],
                   ),
                 ),
-              if (!searching) const SliverToBoxAdapter(child: StoryBar()),
+              if (!searching && Features.on('stories'))
+                const SliverToBoxAdapter(child: StoryBar()),
               if (searching) ..._results(scheme) else ..._home(scheme),
             ],
           ),

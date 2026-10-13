@@ -25,6 +25,8 @@ import 'rewards_screen.dart';
 import '../playback.dart';
 import 'people_screens.dart';
 import '../models.dart';
+import '../features.dart';
+import '../state.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
@@ -33,14 +35,26 @@ class HomeShell extends ConsumerStatefulWidget {
   ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends ConsumerState<HomeShell> {
+class _HomeShellState extends ConsumerState<HomeShell>
+    with WidgetsBindingObserver {
   int _tab = 0; // 0 home, 1 discover, 2 live, 3 profile
   bool _routeCovered = false;
   final _feedKey = GlobalKey<_FeedScreenState>();
   LivePulse? _pulse;
 
+  // Back in front: pick up modules the admin switched on or off.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      refreshFeatures(ref).then((_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pulse?.stop();
     ScreenTime.instance
       ..stop()
@@ -137,6 +151,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Tapping a push opens the matching screen.
     PushService.instance.onOpen = (data) async {
       if (!mounted) return;
@@ -214,6 +229,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   Future<void> _create() async {
     HapticFeedback.lightImpact();
+    if (!Features.on('upload') &&
+        !Features.on('live') &&
+        !Features.on('stories')) {
+      showToast(context, tr('Posting is paused right now.'));
+      return;
+    }
     final choice = await showModalBottomSheet<String>(
       context: context,
       builder: (context) => SafeArea(
@@ -226,35 +247,40 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Expanded(
-                    child: _CreateOption(
-                      icon: Icons.movie_creation_rounded,
-                      title: tr('Post a video'),
-                      subtitle: tr('Record or upload'),
-                      gradient: AppColors.brandGradient,
-                      onTap: () => Navigator.pop(context, 'video'),
+                  if (Features.on('upload'))
+                    Expanded(
+                      child: _CreateOption(
+                        icon: Icons.movie_creation_rounded,
+                        title: tr('Post a video'),
+                        subtitle: tr('Record or upload'),
+                        gradient: AppColors.brandGradient,
+                        onTap: () => Navigator.pop(context, 'video'),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _CreateOption(
-                      icon: Icons.podcasts_rounded,
-                      title: tr('Go Live'),
-                      subtitle: tr('Stream & get gifts'),
-                      gradient: AppColors.liveGradient,
-                      onTap: () => Navigator.pop(context, 'live'),
+                  if (Features.on('upload') && Features.on('live'))
+                    const SizedBox(width: 12),
+                  if (Features.on('live'))
+                    Expanded(
+                      child: _CreateOption(
+                        icon: Icons.podcasts_rounded,
+                        title: tr('Go Live'),
+                        subtitle: tr('Stream & get gifts'),
+                        gradient: AppColors.liveGradient,
+                        onTap: () => Navigator.pop(context, 'live'),
+                      ),
                     ),
-                  ),
                 ],
               ),
-              const SizedBox(height: 12),
-              _CreateOption(
-                icon: Icons.amp_stories_rounded,
-                title: tr('Story'),
-                subtitle: tr('Photo or video for 24 hours'),
-                gradient: AppColors.goldGradient,
-                onTap: () => Navigator.pop(context, 'story'),
-              ),
+              if (Features.on('stories')) ...[
+                const SizedBox(height: 12),
+                _CreateOption(
+                  icon: Icons.amp_stories_rounded,
+                  title: tr('Story'),
+                  subtitle: tr('Photo or video for 24 hours'),
+                  gradient: AppColors.goldGradient,
+                  onTap: () => Navigator.pop(context, 'story'),
+                ),
+              ],
             ],
           ),
         ),
@@ -621,17 +647,18 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
                 child: Row(
                   children: [
                     const SizedBox(width: 6),
-                    _LiveButton(
-                      onTap: () async {
-                        setState(() => _covered = true);
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const LiveScreen(active: true),
-                          ),
-                        );
-                        if (mounted) setState(() => _covered = false);
-                      },
-                    ),
+                    if (Features.on('live'))
+                      _LiveButton(
+                        onTap: () async {
+                          setState(() => _covered = true);
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const LiveScreen(active: true),
+                            ),
+                          );
+                          if (mounted) setState(() => _covered = false);
+                        },
+                      ),
                     Expanded(
                       child: Center(
                         child: SizedBox(
