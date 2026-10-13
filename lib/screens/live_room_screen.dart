@@ -105,6 +105,11 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
   }
 
   final _chat = <_ChatLine>[];
+
+  /// Busy lives get many messages and likes a second: only the chat list and the like counter
+  /// redraw for them, not the whole live screen (videos, grid, overlays).
+  final _chatVersion = ValueNotifier<int>(0);
+  final _likes = ValueNotifier<int>(0);
   final _input = TextEditingController();
   final _gifts = GlobalKey<GiftOverlayState>();
   final _hearts = GlobalKey<_FloatingHeartsState>();
@@ -128,7 +133,7 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
   Timer? _topTimer, _joinedTimer, _likeTimer;
   String? _joined;
   int _joinedLevel = 0;
-  int _likes = 0, _pendingLikes = 0;
+  int _pendingLikes = 0;
   Gift? _quickGift;
 
   /// Multi-guest live. Viewer: my request status (none / requested / active) and
@@ -174,6 +179,8 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
     _guestPoll?.cancel();
     _stageTimer?.cancel();
     _stageSoon?.cancel();
+    _chatVersion.dispose();
+    _likes.dispose();
     // Leaving the screen also leaves the stage / cancels a request.
     if (!widget.isHost && _guestStatus != 'none' && _live != null) {
       ref.read(apiProvider).leaveLiveStage(_live!.id).ignore();
@@ -504,7 +511,7 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
         case 'heart':
           final n = ((m['c'] as num?)?.toInt() ?? 1).clamp(1, 50);
           _hearts.currentState?.burst(n.clamp(1, 5));
-          setState(() => _likes += n);
+          _likes.value += n;
         case 'gift':
           final gift = Gift(
             id: 0,
@@ -548,10 +555,9 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
 
   void _addLine(_ChatLine line) {
     if (!mounted) return;
-    setState(() {
-      _chat.add(line);
-      if (_chat.length > 60) _chat.removeAt(0);
-    });
+    _chat.add(line);
+    if (_chat.length > 60) _chat.removeAt(0);
+    _chatVersion.value++;
   }
 
   Future<void> _sendChat() async {
@@ -594,7 +600,7 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
     if (widget.isHost || _ended) return;
     HapticFeedback.selectionClick();
     _hearts.currentState?.burst(1);
-    setState(() => _likes++);
+    _likes.value++;
     _pendingLikes++;
     _likeTimer ??= Timer(const Duration(milliseconds: 500), () {
       _likeTimer = null;
@@ -2457,14 +2463,19 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                             ),
                           ),
                         ],
-                        if (_likes > 0) ...[
-                          const SizedBox(width: 6),
-                          _TopChip(
-                            icon: Icons.favorite_rounded,
-                            color: AppColors.like,
-                            text: compactCount(_likes),
-                          ),
-                        ],
+                        ValueListenableBuilder<int>(
+                          valueListenable: _likes,
+                          builder: (context, likes, _) => likes > 0
+                              ? Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: _TopChip(
+                                    icon: Icons.favorite_rounded,
+                                    color: AppColors.like,
+                                    text: compactCount(likes),
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
                       ],
                     ),
                   ),
@@ -2618,17 +2629,25 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                               stops: [0, .25],
                             ).createShader(r),
                             blendMode: BlendMode.dstIn,
-                            child: ListView.builder(
-                              reverse: true,
-                              padding: const EdgeInsets.fromLTRB(12, 30, 90, 4),
-                              itemCount: _chat.length,
-                              itemBuilder: (context, i) {
-                                final line = _chat[_chat.length - 1 - i];
-                                return GestureDetector(
-                                  onTap: () => _lineActions(line),
-                                  child: _ChatBubble(line: line),
-                                );
-                              },
+                            child: ValueListenableBuilder<int>(
+                              valueListenable: _chatVersion,
+                              builder: (context, _, _) => ListView.builder(
+                                reverse: true,
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  30,
+                                  90,
+                                  4,
+                                ),
+                                itemCount: _chat.length,
+                                itemBuilder: (context, i) {
+                                  final line = _chat[_chat.length - 1 - i];
+                                  return GestureDetector(
+                                    onTap: () => _lineActions(line),
+                                    child: _ChatBubble(line: line),
+                                  );
+                                },
+                              ),
                             ),
                           ),
                         ),

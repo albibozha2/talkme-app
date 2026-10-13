@@ -275,6 +275,7 @@ class _LiveCard extends StatelessWidget {
               CachedNetworkImage(
                 imageUrl: live.host.avatarUrl!,
                 fit: BoxFit.cover,
+                memCacheWidth: 400,
                 color: Colors.black38,
                 colorBlendMode: BlendMode.darken,
               )

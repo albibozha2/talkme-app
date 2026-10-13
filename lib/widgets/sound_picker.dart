@@ -35,6 +35,7 @@ class SoundCover extends StatelessWidget {
           : CachedNetworkImage(
               imageUrl: sound.coverUrl!,
               fit: BoxFit.cover,
+              memCacheWidth: 160,
               errorWidget: (_, _, _) => const DecoratedBox(
                 decoration: BoxDecoration(gradient: AppColors.brandGradient),
                 child: Icon(Icons.music_note_rounded, color: Colors.white),

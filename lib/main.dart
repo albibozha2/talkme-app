@@ -19,6 +19,7 @@ import 'widgets/common.dart';
 import 'widgets/intro_splash.dart';
 import 'video_cache.dart';
 import 'i18n.dart';
+import 'kv.dart';
 
 import 'package:flutter/foundation.dart';
 
@@ -68,8 +69,9 @@ class App extends ConsumerWidget {
   }
 }
 
-/// The app behind the animated welcome splash, which fades away once the app has loaded
-/// (shown for at least ~2 seconds so it never just flashes, at most 6).
+/// The app behind the animated welcome splash, which fades away once the app has loaded.
+/// The first time it plays in full (~2 seconds); after that only as long as loading takes
+/// (a short minimum so it never just flashes), at most 6 seconds.
 class _StartUp extends ConsumerStatefulWidget {
   const _StartUp();
 
@@ -78,14 +80,18 @@ class _StartUp extends ConsumerStatefulWidget {
 }
 
 class _StartUpState extends ConsumerState<_StartUp> {
+  static const _seenKey = 'intro_seen';
   bool _minShown = false, _gone = false, _hide = false;
   Timer? _min, _max;
 
   @override
   void initState() {
     super.initState();
-    _min = Timer(const Duration(milliseconds: 2100), () {
-      if (mounted) setState(() => _minShown = true);
+    Kv.read(_seenKey).then((seen) {
+      if (seen == null) Kv.write(_seenKey, '1');
+      _min = Timer(Duration(milliseconds: seen == null ? 2100 : 450), () {
+        if (mounted) setState(() => _minShown = true);
+      });
     });
     _max = Timer(const Duration(seconds: 6), () {
       if (mounted) setState(() => _hide = true);
@@ -113,7 +119,7 @@ class _StartUpState extends ConsumerState<_StartUp> {
             ignoring: hide,
             child: AnimatedOpacity(
               opacity: hide ? 0 : 1,
-              duration: const Duration(milliseconds: 550),
+              duration: const Duration(milliseconds: 350),
               curve: Curves.easeOut,
               onEnd: () {
                 if (hide && mounted) setState(() => _gone = true);

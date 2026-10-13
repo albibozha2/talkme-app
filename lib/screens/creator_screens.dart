@@ -203,6 +203,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                           : Image.network(
                               v.thumbUrl!,
                               fit: BoxFit.cover,
+                              cacheWidth: 240,
                               errorBuilder: (_, _, _) => const SizedBox(),
                             ),
                     ),

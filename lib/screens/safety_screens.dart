@@ -852,6 +852,7 @@ class _HeldCommentsScreenState extends ConsumerState<HeldCommentsScreen> {
                                 c.thumbUrl!,
                                 width: 36,
                                 height: 48,
+                                cacheWidth: 96,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, _, _) => const SizedBox(),
                               ),

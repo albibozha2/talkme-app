@@ -83,11 +83,16 @@ class Api {
           receiveTimeout: const Duration(seconds: 3),
         ),
       ).get<dynamic>('$base/config');
-      return res.data is Map && (res.data as Map)['ok'] == true;
+      final ok = res.data is Map && (res.data as Map)['ok'] == true;
+      if (ok) _startConfig = (base, (res.data as Map)['data']);
+      return ok;
     } catch (_) {
       return false;
     }
   }
+
+  /// The /config answer fetched by the https check at start (used once, saves a round trip).
+  static (String, Object?)? _startConfig;
 
   /// Turns what a person types ("abc.trycloudflare.com", "192.168.1.5:8088")
   /// into an API base URL ("https://abc.trycloudflare.com/api").
@@ -211,8 +216,14 @@ class Api {
 
   // ---- endpoints ----
 
-  Future<RemoteConfig> config() async =>
-      RemoteConfig(await get('/config') as Map<String, dynamic>);
+  Future<RemoteConfig> config() async {
+    final early = _startConfig;
+    _startConfig = null;
+    if (early != null && early.$1 == _server && early.$2 is Map<String, dynamic>) {
+      return RemoteConfig(early.$2 as Map<String, dynamic>);
+    }
+    return RemoteConfig(await get('/config') as Map<String, dynamic>);
+  }
 
   Future<AppUser> login(String login, String password) =>
       _auth('/auth/login', {'login': login, 'password': password});
