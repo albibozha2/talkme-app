@@ -15,8 +15,8 @@ import 'common.dart';
 /// Gifts on screen, TikTok-style:
 /// * every gift: a banner on the left that counts up while the same person keeps sending (x2, x3 … x99);
 /// * mid-price gifts (≥ 49 coins): a big pop in the middle;
-/// * premium gifts (≥ 199 coins): a full-screen animation (rocket, diamond, castle, lion, universe…),
-///   played one after another when several arrive.
+/// * premium gifts (1000+ coins, themed ones from 199, or any with an uploaded animation): a full-screen
+///   animation (rocket, diamond, castle, lion, universe, vehicles…), played one after another when several arrive.
 class GiftOverlay extends StatefulWidget {
   const GiftOverlay({super.key});
 
@@ -61,7 +61,9 @@ class GiftOverlayState extends State<GiftOverlay> {
         senderLevel: e.senderLevel,
       );
     }
-    final premium = e.gift.coins >= 199 || e.gift.animUrl != null;
+    final premium = e.gift.coins >= 1000 ||
+        e.gift.animUrl != null ||
+        (e.gift.coins >= 199 && _kindOf(e.gift) != _Kind.fireworks);
     final key = '${e.senderName}|${e.gift.name}';
     final id = ++_seq;
     setState(() {
@@ -82,7 +84,7 @@ class GiftOverlayState extends State<GiftOverlay> {
         _bigQueue.add(e);
         _big ??= _bigQueue.removeAt(0);
         _burst = null;
-      } else if (e.gift.coins >= 49 || e.total >= 490) {
+      } else if (e.gift.coins >= 99 || e.total >= 990) {
         _burst = (id, e);
       }
     });
@@ -274,7 +276,9 @@ class _ComboBanner extends StatelessWidget {
   }
 }
 
-enum _Kind { rocket, diamond, castle, lion, universe, fireworks }
+enum _Kind { rocket, diamond, castle, lion, universe, vehicle, fireworks }
+
+const _vehicles = ['car', 'motorcycle', 'train', 'jet', 'yacht', 'interstellar', 'ship', 'plane'];
 
 _Kind _kindOf(Gift g) {
   final n = g.name.toLowerCase();
@@ -283,6 +287,7 @@ _Kind _kindOf(Gift g) {
   if (n.contains('castle') || g.icon == '🏰') return _Kind.castle;
   if (n.contains('lion') || g.icon == '🦁') return _Kind.lion;
   if (n.contains('universe') || n.contains('galaxy') || g.icon == '🌌') return _Kind.universe;
+  if (_vehicles.any(n.contains)) return _Kind.vehicle;
   return _Kind.fireworks;
 }
 
@@ -458,6 +463,19 @@ class _BigGiftEffectState extends State<_BigGiftEffect> with SingleTickerProvide
             ),
           ],
         );
+      case _Kind.vehicle:
+        // Speeds in from the right, slows down in the middle, then races off to the left.
+        final x = t < .35
+            ? 1 - Curves.easeOutCubic.transform(t / .35)
+            : t > .7
+            ? -Curves.easeInCubic.transform((t - .7) / .3) * 1.4
+            : 0.0;
+        final bounce = sin(t * 60) * 2;
+        return Positioned(
+          left: size.width / 2 - 80 + x * size.width,
+          top: size.height * .4 + bounce,
+          child: _emoji(icon, 150),
+        );
       case _Kind.fireworks:
         final pop = Curves.easeOutBack.transform((t / .3).clamp(0.0, 1.0));
         return Center(
@@ -557,6 +575,9 @@ class _ParticlesPainter extends CustomPainter {
         _coinRain(canvas, size, rnd);
       case _Kind.universe:
         _warp(canvas, size, rnd);
+      case _Kind.vehicle:
+        _speedLines(canvas, size, rnd);
+        if (t > .35 && t < .75) _burst(canvas, Offset(size.width / 2, size.height * .3), (t - .35) / .4, rnd, 36, 150);
       case _Kind.fireworks:
         for (var i = 0; i < 4; i++) {
           final p = (t - i * .15) / .45;
@@ -565,6 +586,19 @@ class _ParticlesPainter extends CustomPainter {
             _burst(canvas, c, p, Random(seed + i), 30, 110);
           }
         }
+    }
+  }
+
+  void _speedLines(Canvas canvas, Size size, Random rnd) {
+    final paint = Paint()..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 40; i++) {
+      final y = size.height * (.3 + .3 * rnd.nextDouble());
+      final len = 60 + rnd.nextDouble() * 140;
+      final x = (size.width + len) * (1 - ((t * (1.5 + rnd.nextDouble()) + rnd.nextDouble()) % 1.0)) - len;
+      paint
+        ..color = Colors.white.withValues(alpha: .15 + .35 * rnd.nextDouble())
+        ..strokeWidth = 1 + 2 * rnd.nextDouble();
+      canvas.drawLine(Offset(x, y), Offset(x + len, y), paint);
     }
   }
 

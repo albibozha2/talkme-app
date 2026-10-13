@@ -490,6 +490,13 @@ class Api {
 
   Future<void> addView(int id) => post('/videos/$id/view');
 
+  /// How long a video played before moving on (loops included): the main signal of the "For you" feed.
+  Future<void> reportWatch(int id, int ms, int durationMs) =>
+      post('/videos/$id/watch', {'ms': ms, 'duration_ms': durationMs});
+
+  /// Shared outside the app (helps the video reach more people).
+  Future<void> reportShare(int id) => post('/videos/$id/share');
+
   Future<PageResult<Comment>> comments(int videoId, String? cursor) async =>
       _page(
         await get('/videos/$videoId/comments', {'cursor': ?cursor}),

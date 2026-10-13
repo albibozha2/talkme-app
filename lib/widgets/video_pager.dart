@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
@@ -53,6 +55,12 @@ class VideoPagerState extends ConsumerState<VideoPager>
   late int _current = widget.initialIndex;
   final _players = <int, VideoPlayerController>{};
   final _viewed = <int>{};
+
+  /// Watch time of the video on screen, reported when the person moves on.
+  Timer? _watchTick;
+  int? _watchId;
+  int _watchMs = 0, _watchLength = 0;
+  Api? _api;
   bool _loading = false;
   bool _foreground = true;
   Object? _error;
@@ -63,6 +71,7 @@ class VideoPagerState extends ConsumerState<VideoPager>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _watchTick = Timer.periodic(const Duration(milliseconds: 250), (_) => _tickWatch());
     if (_items.isEmpty) {
       _loadMore();
     } else {
@@ -79,12 +88,15 @@ class VideoPagerState extends ConsumerState<VideoPager>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
+    if (!_foreground) _flushWatch();
     _applyPlayback();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _watchTick?.cancel();
+    _flushWatch();
     _soundSync?.dispose();
     for (final c in _players.values) {
       c.dispose();
@@ -93,8 +105,32 @@ class VideoPagerState extends ConsumerState<VideoPager>
     super.dispose();
   }
 
+  void _tickWatch() {
+    if (_items.isEmpty || _current >= _items.length) return;
+    final id = _items[_current].id;
+    final c = _players[id];
+    if (c == null || !c.value.isPlaying || !_shouldPlay) return;
+    if (_watchId != id) {
+      _flushWatch();
+      _watchId = id;
+    }
+    _watchMs += 250;
+    _watchLength = c.value.duration.inMilliseconds;
+    _api = ref.read(apiProvider);
+  }
+
+  void _flushWatch() {
+    final id = _watchId, api = _api;
+    if (id != null && api != null && _watchMs >= 250) {
+      api.reportWatch(id, _watchMs, _watchLength).catchError((Object _) {});
+    }
+    _watchId = null;
+    _watchMs = 0;
+  }
+
   /// Reload from the top (pull to refresh, or tapping the Home tab again).
   Future<void> refresh() async {
+    _flushWatch();
     _soundSync?.dispose();
     _soundSync = null;
     _soundFor = null;

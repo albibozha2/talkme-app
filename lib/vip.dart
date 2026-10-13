@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'i18n.dart';
 
 /// VIP tiers for gifters, from the gifter level (which grows with the coins someone has gifted).
-/// Level n needs 25·n² coins in total (same formula as the server).
+/// Level n needs 100·n² coins in total (same formula as the server).
 class VipTier {
   const VipTier(
     this.name,
@@ -55,7 +55,7 @@ VipTier? nextVip(int level) {
   return null;
 }
 
-int coinsForLevel(int level) => 25 * level * level;
+int coinsForLevel(int level) => 100 * level * level;
 
 /// The perks of a tier (cumulative), shown on the VIP card.
 List<String> vipPerks(VipTier t) {

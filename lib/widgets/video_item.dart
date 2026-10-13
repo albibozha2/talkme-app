@@ -132,7 +132,8 @@ class _VideoItemState extends ConsumerState<VideoItem>
   Future<void> _share() async {
     final base = ref.read(apiProvider).server.replaceAll(RegExp(r'/api$'), '');
     final caption = v.caption.isEmpty ? '' : '${v.caption}\n';
-    await SharePlus.instance.share(
+    final api = ref.read(apiProvider);
+    final r = await SharePlus.instance.share(
       ShareParams(
         text: tr('{0}@{1} on TalkMe\n{2}/v/{3}', [
           caption,
@@ -143,6 +144,9 @@ class _VideoItemState extends ConsumerState<VideoItem>
         subject: tr('Watch this on TalkMe'),
       ),
     );
+    if (r.status != ShareResultStatus.dismissed) {
+      api.reportShare(v.id).catchError((Object _) {});
+    }
   }
 
   Future<void> _gift() async {
