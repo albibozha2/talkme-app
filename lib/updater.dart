@@ -35,7 +35,10 @@ class AppRelease {
 
 /// The newest release on the server, or null when there is none / it isn't newer than this app.
 final updateProvider = FutureProvider<AppRelease?>((ref) async {
-  if (kIsWeb || !Platform.isAndroid) return null;
+  // The Google Play version is updated by Play, not by the app.
+  if (kIsWeb || !Platform.isAndroid || const bool.fromEnvironment('PLAY_STORE')) {
+    return null;
+  }
   final data = await ref.watch(apiProvider).get('/app/version');
   final latest = data['latest'];
   if (latest is! Map<String, dynamic>) return null;

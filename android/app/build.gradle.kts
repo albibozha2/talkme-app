@@ -60,6 +60,12 @@ android {
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
+
+    // Google Play build: flutter build appbundle --android-project-arg=play_store=true --dart-define=PLAY_STORE=true
+    // Play does the updating, so this build drops the permission the website APK uses for its Update button.
+    if (project.findProperty("play_store") == "true") {
+        sourceSets.getByName("release").manifest.srcFile("src/play/AndroidManifest.xml")
+    }
 }
 
 kotlin {

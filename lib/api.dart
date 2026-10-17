@@ -999,6 +999,30 @@ class Api {
 
   Future<void> bannerClick(int id) => post('/banners/$id/click');
 
+  Future<KycStatus> kycStatus() async =>
+      KycStatus.fromJson(await get('/verification') as Map<String, dynamic>);
+
+  Future<KycStatus> submitKyc({
+    required String docType,
+    required String fullName,
+    required String birthDate,
+    required String front,
+    String? back,
+    required String selfie,
+  }) async => KycStatus.fromJson(
+    await post(
+      '/verification',
+      FormData.fromMap({
+        'doc_type': docType,
+        'full_name': fullName,
+        'birth_date': birthDate,
+        'front': await uploadFile(front, filename: 'front.jpg'),
+        if (back != null) 'back': await uploadFile(back, filename: 'back.jpg'),
+        'selfie': await uploadFile(selfie, filename: 'selfie.jpg'),
+      }),
+    ) as Map<String, dynamic>,
+  );
+
   Future<PayoutInfo> payouts() async =>
       PayoutInfo.fromJson(await get('/wallet/payouts') as Map<String, dynamic>);
 

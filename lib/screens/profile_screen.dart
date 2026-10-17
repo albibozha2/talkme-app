@@ -26,6 +26,7 @@ import 'follow_list_screen.dart';
 import 'stories_screen.dart';
 import '../widgets/invite_sheet.dart';
 import 'rewards_screen.dart';
+import 'verification_screen.dart';
 import 'leaderboard_screen.dart';
 import 'live_extras.dart';
 import 'history_screen.dart';
@@ -204,6 +205,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   onTap: () => Navigator.pop(context, 'hidden'),
                 ),
                 ListTile(
+                  leading: const Icon(Icons.badge_outlined),
+                  title: Text(tr('Verify identity')),
+                  onTap: () => Navigator.pop(context, 'kyc'),
+                ),
+                ListTile(
                   leading: const Icon(Icons.card_giftcard_rounded),
                   title: Text(tr('Daily rewards')),
                   onTap: () => Navigator.pop(context, 'rewards'),
@@ -282,6 +288,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         await _push(const HiddenAccountsScreen());
       case 'rewards':
         await _push(const RewardsScreen());
+      case 'kyc':
+        await _push(const VerificationScreen());
       case 'leaders':
         await _push(const LeaderboardScreen());
       case 'mods':

@@ -6,6 +6,7 @@ class AppUser {
     this.bio = '',
     this.avatarUrl,
     this.verified = false,
+    this.idVerified = false,
     this.followers = 0,
     this.following = 0,
     this.videos = 0,
@@ -95,6 +96,9 @@ class AppUser {
   final String bio;
   final String? avatarUrl;
   final bool verified;
+
+  /// Own account only: identity (ID card / passport + selfie) approved.
+  final bool idVerified;
   final int followers;
   final int following;
   final int videos;
@@ -128,6 +132,7 @@ class AppUser {
     bio: (j['bio'] as String?) ?? '',
     avatarUrl: j['avatar_url'] as String?,
     verified: (j['verified'] as bool?) ?? false,
+    idVerified: (j['id_verified'] as bool?) ?? false,
     followers: (j['followers'] as int?) ?? 0,
     following: (j['following'] as int?) ?? 0,
     videos: (j['videos'] as int?) ?? 0,
@@ -1547,4 +1552,21 @@ class SessionInfo {
         : DateTime.parse(j['last_active'] as String),
     current: (j['current'] as bool?) ?? false,
   );
+}
+
+/// Identity verification state (GET /verification).
+class KycStatus {
+  KycStatus.fromJson(Map<String, dynamic> j)
+    : verified = j['verified'] == true,
+      status = (j['status'] as String?) ?? 'none',
+      reason = j['reason'] as String?,
+      gestureIcon = (j['gesture']?['icon'] as String?) ?? '✌️',
+      gestureText = (j['gesture']?['text'] as String?) ?? '',
+      minAge = (j['min_age'] as int?) ?? 18;
+  final bool verified;
+  final String status;
+  final String? reason;
+  final String gestureIcon;
+  final String gestureText;
+  final int minAge;
 }

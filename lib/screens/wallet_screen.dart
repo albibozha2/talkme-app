@@ -13,6 +13,7 @@ import '../widgets/recharge_sheet.dart';
 import '../i18n.dart';
 import '../vip.dart';
 import 'rewards_screen.dart';
+import 'verification_screen.dart';
 import '../features.dart';
 
 class WalletScreen extends ConsumerStatefulWidget {
@@ -449,7 +450,11 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                   ],
                   if (_payouts != null && Features.on('payouts')) ...[
                     const SizedBox(height: 26),
-                    _WithdrawCard(info: _payouts!, onChanged: _load),
+                    _WithdrawCard(
+                      info: _payouts!,
+                      onChanged: _load,
+                      idVerified: _me?.idVerified ?? true,
+                    ),
                   ],
                   const SizedBox(height: 26),
                   Text(
@@ -536,8 +541,20 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
 
 /// Earnings withdrawal: balance in money, request button, and past requests.
 class _WithdrawCard extends ConsumerWidget {
-  const _WithdrawCard({required this.info, required this.onChanged});
+  const _WithdrawCard({
+    required this.info,
+    required this.onChanged,
+    this.idVerified = true,
+  });
   final PayoutInfo info;
+  final bool idVerified;
+
+  Future<void> _verify(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const VerificationScreen()),
+    );
+    await onChanged();
+  }
   final Future<void> Function() onChanged;
 
   Future<void> _request(BuildContext context) async {
@@ -624,6 +641,14 @@ class _WithdrawCard extends ConsumerWidget {
             style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12.5),
           ),
           const SizedBox(height: 14),
+          if (!idVerified) ...[
+            OutlinedButton.icon(
+              onPressed: () => _verify(context),
+              icon: const Icon(Icons.badge_outlined),
+              label: Text(tr('Verify your identity to withdraw')),
+            ),
+            const SizedBox(height: 8),
+          ],
           SizedBox(
             height: 48,
             child: GradientButton(
